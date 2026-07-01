@@ -1,0 +1,133 @@
+import { LogOut, User, Settings, CreditCard, ChevronDown, Globe } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/stores/authStore'
+import { Badge } from '@/components/ui/badge'
+
+const LANGUAGES = [
+  { code: 'en', label: 'English', flag: '🇺🇸' },
+  { code: 'zh', label: '中文', flag: '🇨🇳' },
+  { code: 'ja', label: '日本語', flag: '🇯🇵' },
+  { code: 'ko', label: '한국어', flag: '🇰🇷' },
+  { code: 'es', label: 'Español', flag: '🇪🇸' },
+  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+  { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
+  { code: 'pt', label: 'Português', flag: '🇧🇷' },
+  { code: 'ru', label: 'Русский', flag: '🇷🇺' },
+]
+
+export function Header() {
+  const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
+
+  const currentLang = LANGUAGES.find((l) => l.code === i18n.language) || LANGUAGES[0]
+
+  const switchLanguage = (code: string) => {
+    i18n.changeLanguage(code)
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
+  // 头像显示优先级：username > full_name > email
+  const displayName = user?.username || user?.full_name || user?.email || 'U'
+  const avatarLetter = displayName.charAt(0).toUpperCase()
+
+  return (
+    <header className="flex h-14 items-center justify-between border-b bg-card px-4 lg:px-6">
+      {/* Left */}
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold" />
+      </div>
+
+      {/* Right */}
+      <div className="flex items-center gap-2 lg:gap-4">
+        {/* Language Switcher */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="flex items-center gap-1.5 px-2 text-muted-foreground">
+              <Globe className="h-4 w-4" />
+              <span className="hidden text-xs md:inline-block">{currentLang.flag} {currentLang.label}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              {t('common.language')}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {LANGUAGES.map((lang) => (
+              <DropdownMenuItem
+                key={lang.code}
+                className={i18n.language === lang.code ? 'bg-accent font-medium' : ''}
+                onClick={() => switchLanguage(lang.code)}
+              >
+                <span className="mr-2">{lang.flag}</span>
+                {lang.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Credits badge */}
+        {user && (
+          <Badge variant="secondary" className="gap-1 px-2 py-1 text-xs whitespace-nowrap">
+            <CreditCard className="h-3 w-3" />
+            <span>{user.credits_remaining}</span>
+            <span className="hidden sm:inline">{t('header.credits')}</span>
+          </Badge>
+        )}
+
+        {/* User menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2 px-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                {avatarLetter}
+              </div>
+              <span className="hidden text-sm font-medium md:inline-block max-w-[120px] truncate">
+                {displayName}
+              </span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>
+              <div className="flex flex-col">
+                <span className="font-medium truncate max-w-[180px]">{displayName}</span>
+                <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                  {user?.email}
+                </span>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
+              <Settings className="mr-2 h-4 w-4" />
+              {t('header.settings')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/billing')}>
+              <CreditCard className="mr-2 h-4 w-4" />
+              {t('header.billing')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              {t('header.logout')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  )
+}
