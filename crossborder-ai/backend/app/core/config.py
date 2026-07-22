@@ -16,10 +16,16 @@ class Settings(BaseSettings):
     # --- Application ---
     APP_NAME: str = "VeyaShip"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
-    SECRET_KEY: str = "change-me-in-production"
+    DEBUG: bool = False
+    SECRET_KEY: str = ""                          # 必须通过 .env 设置
+    APP_URL: str = "http://localhost:8000"        # 生产环境改为实际域名
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_ROOT: str = "/app"
+
+    @property
+    def DOCS_ENABLED(self) -> bool:
+        """文档接口仅在 DEBUG 模式下开放。"""
+        return bool(self.DEBUG) and bool(self.SECRET_KEY)
 
     # ── 数据库配置 ────────────────────────────────────────────
     # 连接字符串格式：协议://用户名:密码@地址:端口/数据库名
@@ -30,7 +36,7 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "crossborder_ai"          # 数据库名
     POSTGRES_USER: str = "crossborder"            # 数据库用户
-    POSTGRES_PASSWORD: str = "change_this_password"
+    POSTGRES_PASSWORD: str = ""
     DATABASE_URL: Optional[str] = None            # 手动指定的完整连接串
     USE_SQLITE: bool = False                      # True=SQLite开发 False=PostgreSQL生产
 
@@ -70,7 +76,7 @@ class Settings(BaseSettings):
         return values
 
     # --- JWT ---
-    JWT_SECRET_KEY: str = "change-me-jwt-secret"
+    JWT_SECRET_KEY: str = ""                    # 必须通过 .env 设置
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
@@ -79,6 +85,7 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost",
+        "https://localhost",
     ]
 
     @model_validator(mode="before")
@@ -133,8 +140,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     class Config:
-        env_file = ".env"
+        env_file = "../.env"      # .env 在项目根目录（相对于 backend/ 目录）
+        env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

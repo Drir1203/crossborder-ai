@@ -5,8 +5,9 @@
 
 import uuid
 from datetime import datetime
+from uuid import UUID as UUIDType
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +28,15 @@ class Product(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
+    # ── 所属用户 ──────────────────────────────────────────────
+    # 记录是哪个用户抓取/录入的这个商品。方便按用户统计
+    # 可以为空，兼容已有的数据（尚未迁移的旧数据 user_id 为 null）
+    # ForeignKey 关联到 users 表，如果用户被删除，商品也跟随删除
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+
     # ── 核心数据 ──────────────────────────────────────────────
     # url 加了唯一索引，防止重复抓取同一个商品
     url: Mapped[str] = mapped_column(
@@ -42,6 +52,10 @@ class Product(Base):
     price: Mapped[float | None] = mapped_column(Float, nullable=True)
     sales_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     shop_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # ── 描述（手动补充） ──────────────────────────────────────
+    # 用户可以在抓取后手动补充商品描述，AI 生成 Listing 时会用到
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ── 时间戳 ──────────────────────────────────────────────
     # created_at 在插入时自动填

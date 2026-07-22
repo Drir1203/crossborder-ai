@@ -1,20 +1,73 @@
 """VeyaShip - Main Application Entry Point."""
 
+import time
+import logging
+
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Scope, Receive, Send
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.routers import auth, users, products, content, billing
+from app.routers import auth, users, products, content, images, billing, shopify, batch, radar, ledger, analytics
 from app.routers import settings as settings_router
+
+# ── 日志配置 ──────────────────────────────────────────────────
+logger = logging.getLogger("veyaship")
+logger.setLevel(getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter(
+    "[VeyaShip] %(asctime)s | %(levelname)-5s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+logger.addHandler(handler)
+
+
+# ── 请求日志中间件 ────────────────────────────────────────────
+class RequestLogMiddleware:
+    """记录每个 HTTP 请求的方法、路径、状态码、耗时。"""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        start = time.time()
+        method = scope.get("method", "?")
+        path = scope.get("path", "?")
+
+        async def _send(message):
+            if message["type"] == "http.response.start":
+                status = message["status"]
+                elapsed = time.time() - start
+                logger.info("%s %s → %d (%.0fms)", method, path, status, elapsed * 1000)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, _send)
+        except Exception as exc:
+            elapsed = time.time() - start
+            logger.error("%s %s → ERROR (%dms): %s", method, path, elapsed * 1000, str(exc))
+            raise
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print(f"[VeyaShip] v{settings.APP_VERSION} starting...")
+
+    # 启动时检查密钥是否已配置
+    if not settings.SECRET_KEY:
+        print("[VeyaShip] ⚠️  SECRET_KEY 未设置！请在 .env 中配置")
+    if not settings.JWT_SECRET_KEY:
+        print("[VeyaShip] ⚠️  JWT_SECRET_KEY 未设置！请在 .env 中配置")
+
     await init_db()
     print(f"[VeyaShip] Database ready ({'SQLite' if settings.USE_SQLITE else 'PostgreSQL'})")
     yield
@@ -24,9 +77,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    docs_url="/docs" if settings.DEBUG else None,
+    docs_url="/docs" if settings.DOCS_ENABLED else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if settings.DOCS_ENABLED else None,
     lifespan=lifespan,
 )
+
+
+# ── 全局异常处理器 ────────────────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """捕获所有未处理的异常，返回安全错误响应。
+
+    生产环境不暴露内部错误细节，DEBUG 模式下显示详细错误。
+    """
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, str(exc))
+
+    if settings.DEBUG:
+        detail = f"{type(exc).__name__}: {str(exc)}"
+    else:
+        detail = "服务器内部错误，请稍后重试"
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": detail},
+    )
+
+
+# 请求日志中间件（最外层，记录所有请求）
+app.add_middleware(RequestLogMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,10 +122,32 @@ app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(products.router, prefix=API_PREFIX)
 app.include_router(settings_router.router, prefix=API_PREFIX)
 app.include_router(content.router, prefix=API_PREFIX)
+app.include_router(images.router, prefix=API_PREFIX)
 app.include_router(billing.router, prefix=API_PREFIX)
+app.include_router(shopify.router, prefix=API_PREFIX)
+app.include_router(batch.router, prefix=API_PREFIX)
+app.include_router(radar.router, prefix=API_PREFIX)
+app.include_router(ledger.router, prefix=API_PREFIX)
+app.include_router(analytics.router, prefix=API_PREFIX)
 
 
 # --- Health Check ---
 @app.get("/health", tags=["System"])
 async def health_check():
-    return {"status": "ok"}
+    """健康检查：返回服务状态、版本、数据库连接状态。"""
+    db_ok = False
+    try:
+        from app.core.database import async_session_factory
+        async with async_session_factory() as session:
+            from sqlalchemy import text
+            await session.execute(text("SELECT 1"))
+            db_ok = True
+    except Exception:
+        db_ok = False
+
+    return {
+        "status": "healthy" if db_ok else "degraded",
+        "version": settings.APP_VERSION,
+        "database": "connected" if db_ok else "disconnected",
+        "debug": settings.DEBUG,
+    }

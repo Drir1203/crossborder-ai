@@ -1,0 +1,17 @@
+# VeyaShip - Frontend .dockerignore
+
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+.git/
+.gitignore
+.vscode/
+.idea/
+__pycache__/
+*.log
+.DS_Store
+Thumbs.db
+Dockerfile
+.dockerignore

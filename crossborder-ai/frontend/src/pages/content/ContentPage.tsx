@@ -80,6 +80,7 @@ export default function ContentPage() {
   const [language, setLanguage] = useState('en')
   const [generateImage, setGenerateImage] = useState(false)
   const [imagePrompt, setImagePrompt] = useState('')
+  const [expertMode, setExpertMode] = useState(false)
   const [customTone, setCustomTone] = useState('')
   const [copied, setCopied] = useState('')
 
@@ -103,6 +104,7 @@ export default function ContentPage() {
         language,
         generate_image: generateImage,
         image_prompt: imagePrompt || undefined,
+        expert_mode: expertMode,
       })
       return res.data as GenerateResult
     },
@@ -218,6 +220,18 @@ export default function ContentPage() {
                   {l.label}
                 </Badge>
               ))}
+            </CardContent>
+          </Card>
+
+          {/* 专家模式 */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm">生成模式</CardTitle></CardHeader>
+            <CardContent>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={expertMode} onChange={(e) => setExpertMode(e.target.checked)}
+                  className="rounded border-gray-300" />
+                <span className="text-sm">专家模式（多轮自检+优化，质量更高但较慢）</span>
+              </label>
             </CardContent>
           </Card>
 

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": [
+      "Bash(ls *)",
+      "Bash(pip install *)",
+      "Bash(python -m pytest *)",
+      "Bash(rm -f *)",
+      "Bash(mkdir -p *)",
+      "Bash(echo *)",
+      "Bash(cd *)",
+      "Bash(env *)",
+      "Bash(which *)"
+    ]
+  }
+}

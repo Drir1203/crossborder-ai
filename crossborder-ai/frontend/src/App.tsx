@@ -12,6 +12,12 @@ import ProductDetailPage from '@/pages/products/ProductDetailPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import ContentPage from '@/pages/content/ContentPage'
 import BillingPage from '@/pages/billing/BillingPage'
+import ImagesPage from '@/pages/images/ImagesPage'
+import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
+import ShopifyPage from '@/pages/shopify/ShopifyPage'
+import BatchPage from '@/pages/batch/BatchPage'
+import RadarPage from '@/pages/radar/RadarPage'
+import LedgerPage from '@/pages/ledger/LedgerPage'
 import { useAuthStore } from '@/stores/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -42,9 +48,12 @@ export default function App() {
         <Route path="products/:id" element={<ProductDetailPage />} />
         <Route path="listings" element={<ListingsPlaceholder />} />
         <Route path="content" element={<ContentPage />} />
-        <Route path="images" element={<ImagesPlaceholder />} />
-        <Route path="shopify" element={<ShopifyPlaceholder />} />
-        <Route path="analytics" element={<AnalyticsPlaceholder />} />
+        <Route path="images" element={<ImagesPage />} />
+        <Route path="shopify" element={<ShopifyPage />} />
+        <Route path="batch" element={<BatchPage />} />
+        <Route path="radar" element={<RadarPage />} />
+        <Route path="ledger" element={<LedgerPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
@@ -73,14 +82,4 @@ function ListingsPlaceholder() {
   return <PlaceholderPage title="Listings" description="Multi-platform listing management" />
 }
 
-function ImagesPlaceholder() {
-  return <PlaceholderPage title="AI Image Generation" description="Create stunning product images with FLUX AI" />
-}
 
-function ShopifyPlaceholder() {
-  return <PlaceholderPage title="Shopify Integration" description="Connect and manage your Shopify store" />
-}
-
-function AnalyticsPlaceholder() {
-  return <PlaceholderPage title="Analytics" description="Track your content performance and usage" />
-}

@@ -15,10 +15,10 @@ env/
 node_modules/
 frontend/dist/
 
-# Environment
+# Environment（.env 含密钥，不要提交）
 .env
 .env.local
-.env.production
+.env.*.local
 
 # IDE
 .idea/
@@ -53,3 +53,13 @@ htmlcov/
 
 # Vector stores
 qdrant_storage/
+
+# Production (sensitive data, regenerate on deploy)
+nginx/ssl/
+nginx/www/
+backups/
+node_modules/
+.venv/
+venv/
+env/
+

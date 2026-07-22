@@ -13,11 +13,12 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID as UUIDType
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.rate_limit import RateLimit
 from app.core.redis import cache, cache_clear
 from app.dependencies import get_current_user
 from app.models.product import Product
@@ -76,6 +77,8 @@ class ProductListResponse(BaseModel):
 @router.post("/scrape", status_code=status.HTTP_201_CREATED)
 async def scrape_product(
     payload: ScrapeRequest,
+    request: Request,
+    _ratelimit=Depends(RateLimit("scrape")),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -120,7 +123,9 @@ async def scrape_product(
     await current_user.deduct_credits(db, 1)
 
     # ── INSERT ─────────────────────────────────────────────
+    # user_id 记录是谁抓取的，用于后续按用户统计
     product = Product(
+        user_id=current_user.id,  # 记录所属用户
         url=data["url"],
         title=data["title"],
         main_image_url=data["main_image_url"],
@@ -154,6 +159,7 @@ async def create_product_manual(
 
     # INSERT
     product = Product(
+        user_id=current_user.id,
         url=payload.url,
         title=payload.title,
         main_image_url=payload.main_image_url,

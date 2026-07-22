@@ -1,4 +1,5 @@
-import { LogOut, User, Settings, CreditCard, ChevronDown, Globe } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { LogOut, User, Settings, CreditCard, ChevronDown, Globe, Palette } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -12,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
 import { Badge } from '@/components/ui/badge'
+import { themes, getTheme, applyTheme, Theme } from '@/utils/themes'
 
 const LANGUAGES = [
   { code: 'en', label: 'English', flag: '🇺🇸' },
@@ -29,6 +31,12 @@ export function Header() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
+  const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme)
+
+  const switchTheme = (theme: Theme) => {
+    setCurrentTheme(theme)
+    applyTheme(theme)
+  }
 
   const currentLang = LANGUAGES.find((l) => l.code === i18n.language) || LANGUAGES[0]
 
@@ -75,6 +83,31 @@ export function Header() {
               >
                 <span className="mr-2">{lang.flag}</span>
                 {lang.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Theme Switcher */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="flex items-center gap-1.5 px-2 text-muted-foreground">
+              <Palette className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">主题</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {themes.map((theme) => (
+              <DropdownMenuItem
+                key={theme.name}
+                className={currentTheme.name === theme.name ? 'bg-accent font-medium' : ''}
+                onClick={() => switchTheme(theme)}
+              >
+                <span className="w-3 h-3 rounded-full mr-2 inline-block border" style={{
+                  background: `hsl(${theme.colors['--primary']})`,
+                }} />
+                {theme.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

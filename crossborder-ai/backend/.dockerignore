@@ -1,0 +1,43 @@
+# VeyaShip - Backend .dockerignore
+# 防止敏感文件和开发文件被打包到生产镜像
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# IDE & Git
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Logs
+*.log
+logs/

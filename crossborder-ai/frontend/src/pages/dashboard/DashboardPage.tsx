@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import {
@@ -10,6 +12,8 @@ import {
   Globe,
   ArrowRight,
   CreditCard,
+  Link as LinkIcon,
+  MessageSquareText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,7 +21,6 @@ import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/authStore'
 import apiClient from '@/api/client'
 import type { DashboardData } from '@/types'
-import { useNavigate } from 'react-router-dom'
 
 const container = {
   hidden: { opacity: 0 },
@@ -36,6 +39,19 @@ export default function DashboardPage() {
   const { user } = useAuthStore()
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [input, setInput] = useState('')
+
+  const handleSubmit = () => {
+    if (!input.trim()) return
+    const val = input.trim()
+    // URL → 跳转商品抓取
+    if (val.startsWith('http://') || val.startsWith('https://')) {
+      navigate(`/products?url=${encodeURIComponent(val)}`)
+    } else {
+      // 文本 → 跳转 AI 生成（需要先有商品，先跳转到商品页手动录入）
+      navigate(`/products?q=${encodeURIComponent(val)}`)
+    }
+  }
 
   const { data: dashboard, isLoading } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
@@ -100,6 +116,33 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
+      {/* 中央输入框 */}
+      <motion.div variants={item}>
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="pt-6">
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                  placeholder="粘贴 1688 链接抓取商品，或输入商品名称用 AI 生成 Listing..."
+                  className="flex h-12 w-full rounded-md border bg-background pl-10 pr-4 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              <Button className="h-12 px-6" onClick={handleSubmit}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                开始
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              粘贴 1688 链接 → 自动抓取商品信息 ｜ 输入商品名 → 跳转到手动录入
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
       {/* Credit Bar */}
       <motion.div variants={item}>
         <Card className="bg-gradient-to-r from-primary/10 via-primary/5 to-background border-primary/20">
@@ -154,7 +197,7 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/products/new')}>
+            <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/products')}>
               {t('dashboard.addProduct')} <ArrowRight className="h-4 w-4" />
             </Button>
             <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/content')}>

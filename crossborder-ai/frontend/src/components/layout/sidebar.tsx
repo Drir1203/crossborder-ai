@@ -12,6 +12,9 @@ import {
   Globe,
   ChevronLeft,
   Sparkles,
+  Upload,
+  Radar,
+  Calculator,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/button'
@@ -27,6 +30,9 @@ export function Sidebar() {
     { icon: FileText, label: t('nav.listings'), path: '/listings' },
     { icon: Sparkles, label: t('nav.content'), path: '/content' },
     { icon: Image, label: t('nav.images'), path: '/images' },
+    { icon: Upload, label: t('nav.batch'), path: '/batch' },
+    { icon: Radar, label: t('nav.radar'), path: '/radar' },
+    { icon: Calculator, label: t('nav.ledger'), path: '/ledger' },
     { icon: Globe, label: t('nav.shopify'), path: '/shopify' },
     { icon: BarChart3, label: t('nav.analytics'), path: '/analytics' },
     { icon: CreditCard, label: t('nav.billing'), path: '/billing' },

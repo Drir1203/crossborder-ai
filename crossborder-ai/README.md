@@ -259,3 +259,138 @@ Private / Proprietary — All rights reserved.
 - [ ] Payment integration
 - [ ] Testing suite
 - [ ] Production deployment
+- [ ] Frontend batch processing UI
+- [ ] Frontend competitor analysis UI
+- [ ] Frontend profit calculator UI
+
+---
+
+## 🚀 Production Deployment
+
+### Prerequisites
+
+| 需求 | 推荐方案 | 费用 |
+|------|---------|------|
+| **服务器** | Ubuntu 22.04+, 2核4G, 50GB SSD | ~$12-24/月 (DigitalOcean) 或 ¥68/月 (阿里云) |
+| **域名** | 任意域名 | ~¥50-80/年 |
+| **DeepSeek API Key** | [platform.deepseek.com](https://platform.deepseek.com) | 按量计费，新用户送额度 |
+| **Replicate API Key** | [replicate.com](https://replicate.com/account/api-tokens) | 按量计费 |
+
+### 推荐服务器配置
+
+| 规模 | CPU | 内存 | 存储 | 月流量 | 参考价格 |
+|------|-----|------|------|--------|---------|
+| 入门（个人卖家） | 2核 | 4G | 50GB | 2TB | ~$12/月 |
+| 标准（小团队） | 4核 | 8G | 100GB | 4TB | ~$24/月 |
+| 高负载（企业） | 8核 | 16G | 200GB | 8TB | ~$48/月 |
+
+### 部署步骤
+
+#### 1️⃣ 服务器初始化
+
+```bash
+# SSH 登录服务器
+ssh root@你的服务器IP
+
+# 更新系统
+apt update && apt upgrade -y
+
+# 安装 Git
+apt install -y git
+
+# 安装 Docker（一步脚本）
+curl -fsSL https://get.docker.com | bash
+```
+
+#### 2️⃣ 获取代码
+
+```bash
+git clone https://github.com/你的仓库/crossborder-ai.git /opt/veyaship
+cd /opt/veyaship
+```
+
+#### 3️⃣ 一键部署
+
+```bash
+chmod +x deploy.sh
+sudo ./deploy.sh
+```
+
+脚本会自动完成：
+1. ✅ 安装 Docker + Docker Compose
+2. ✅ 生成随机密钥（SECRET_KEY, JWT_SECRET_KEY）
+3. ✅ 申请 Let's Encrypt SSL 证书（需域名已指向服务器）
+4. ✅ 构建 Docker 镜像并启动所有服务
+5. ✅ 健康检查确认服务正常
+
+#### 4️⃣ 手动配置（如果一键脚本走到一半停了）
+
+```bash
+# 编辑环境变量
+nano /opt/veyaship/.env
+# 填入：APP_URL, BACKEND_CORS_ORIGINS, DEEPSEEK_API_KEY, REPLICATE_API_KEY, POSTGRES_PASSWORD
+
+# 修改 Nginx 域名
+sed -i 's/example.com/你的域名.com/g' /opt/veyaship/nginx/nginx.conf
+
+# 启动服务
+cd /opt/veyaship
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### 服务管理
+
+```bash
+# 查看日志
+docker compose -f docker-compose.prod.yml logs -f
+
+# 查看特定服务日志
+docker compose -f docker-compose.prod.yml logs -f backend
+
+# 重启服务
+docker compose -f docker-compose.prod.yml restart backend
+
+# 更新到最新版本
+cd /opt/veyaship
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 停止所有服务
+docker compose -f docker-compose.prod.yml down
+
+# 停止并删除数据（⚠️ 会丢数据！）
+docker compose -f docker-compose.prod.yml down -v
+```
+
+### 数据库备份
+
+```bash
+# 手动备份
+docker exec crossborder-postgres pg_dump -U crossborder crossborder_ai > backup_$(date +%Y%m%d).sql
+
+# 定时备份（每天凌晨 3 点）
+(crontab -l 2>/dev/null; echo "0 3 * * * docker exec crossborder-postgres pg_dump -U crossborder crossborder_ai > /opt/veyaship/backups/veyaship_\$(date +\\%Y\\%m\\%d).sql && find /opt/veyaship/backups -name '*.sql' -mtime +30 -delete") | crontab -
+```
+
+### 监控
+
+```bash
+# 健康检查
+curl https://你的域名.com/health
+
+# 查看容器资源占用
+docker stats
+
+# 查看 PostgreSQL 日志
+docker compose -f docker-compose.prod.yml logs postgres
+```
+
+### 故障排查
+
+| 问题 | 可能原因 | 解决 |
+|------|---------|------|
+| 502 Bad Gateway | 后端未启动 | `docker compose logs backend` |
+| 413 Request Entity Too Large | 上传文件太大 | 检查 nginx.conf 的 `client_max_body_size` |
+| 429 Too Many Requests | 触发了限流 | 等 1 分钟自动恢复 |
+| SSL 证书过期 | Certbot 续期失败 | `certbot renew` 手动续期 |
+| 数据库连不上 | PostgreSQL 未就绪 | `docker compose logs postgres` 确认健康检查通过 |
