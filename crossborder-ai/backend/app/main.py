@@ -1,15 +1,17 @@
 """VeyaShip - Main Application Entry Point."""
 
+import traceback
 import time
 import logging
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Scope, Receive, Send
+from sqlalchemy.exc import DataError, IntegrityError
 
 from app.core.config import settings
 from app.core.database import init_db
@@ -91,7 +93,29 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
     生产环境不暴露内部错误细节，DEBUG 模式下显示详细错误。
     """
-    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, str(exc))
+    # HTTPException 是已知的业务错误，直接返回给用户
+    if isinstance(exc, HTTPException):
+        raise exc
+
+    # SQLAlchemy DataError（如字段超长、类型不匹配）→ 用户输入问题
+    if isinstance(exc, DataError):
+        logger.warning("DataError on %s %s: %s", request.method, request.url.path, str(exc))
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": "输入数据格式有误，请检查后重试"},
+        )
+
+    # SQLAlchemy IntegrityError（如违反唯一约束）
+    if isinstance(exc, IntegrityError):
+        logger.warning("IntegrityError on %s %s: %s", request.method, request.url.path, str(exc))
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": "数据冲突，请检查是否已存在相同记录"},
+        )
+
+    # 未预期的内部错误
+    logger.error("Unhandled exception on %s %s: %s\n%s",
+                 request.method, request.url.path, str(exc), traceback.format_exc())
 
     if settings.DEBUG:
         detail = f"{type(exc).__name__}: {str(exc)}"
