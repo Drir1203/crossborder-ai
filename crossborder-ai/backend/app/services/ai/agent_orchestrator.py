@@ -1,0 +1,316 @@
+"""VeyaShip - AI Agent 编排器
+
+【功能】
+用户用自然语言下达指令，Agent 自动规划并执行多步操作。
+比如 "帮我抓取这个1688商品，生成Amazon Listing" → Agent 自动完成。
+
+【工作流程】
+1. 接收用户指令
+2. LLM 解析意图，规划执行步骤
+3. 按顺序执行每一步（可调用抓取、生成、发布等功能）
+4. 返回执行结果
+
+【可用工具】
+- scrape_1688(url) → 抓取商品
+- create_product(data) → 创建商品
+- generate_listing(product_id, platform) → AI 生成 Listing
+- check_compliance(text) → 合规审查
+- calculate_profit(params) → 净利计算
+"""
+
+import json
+import re
+from typing import Any, Optional
+
+from app.core.config import settings
+from app.models.user import User
+from app.services.ai.deepseek import DeepSeekService
+from app.services.scraper import scrape_1688
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class AgentOrchestrator:
+    """AI Agent 编排器 —— 理解用户指令并自动执行"""
+
+    def __init__(self, user: User, db: AsyncSession):
+        self.llm = DeepSeekService()
+        self.user = user
+        self.db = db
+        self.steps: list[dict] = []  # 记录执行步骤
+
+    async def run(self, instruction: str) -> dict:
+        """执行用户指令
+
+        Args:
+            instruction: 用户输入的自然语言指令
+                例如："帮我抓取 https://detail.1688.com/offer/xxx.html 并生成 Amazon Listing"
+
+        Returns:
+            {
+                "summary": "执行总结",
+                "steps": [每步的详细结果],
+                "status": "success" | "partial" | "failed"
+            }
+        """
+        # ── 第1步：用 LLM 解析指令，生成执行计划 ──────────
+        plan = await self._create_plan(instruction)
+        self.steps = []
+
+        for step in plan.get("steps", []):
+            action = step.get("action", "")
+            params = step.get("params", {})
+            step_result = await self._execute_step(action, params)
+            self.steps.append(step_result)
+
+            # 如果某一步失败了，看后面的步骤是否依赖它
+            if step_result["status"] == "failed" and step.get("critical", False):
+                break
+
+        # ── 汇总结果 ──────────────────────────────────────
+        return self._build_summary()
+
+    async def _create_plan(self, instruction: str) -> dict:
+        """用 LLM 解析用户指令，生成执行计划
+
+        让 AI 决定需要做什么、按什么顺序做。
+        """
+        system_prompt = """你是一个跨境电商 AI 助手，负责将用户的自然语言指令转为执行计划。
+
+可用工具（action列表）：
+1. scrape_1688 — 抓取1688商品
+   参数: {"url": "1688商品链接"}
+   输出: 商品标题、价格、图片
+
+2. create_product — 创建商品到系统
+   参数: {"url": "...", "title": "...", "price": 数字}
+   注意: scrape_1688 后才能拿到数据
+
+3. generate_listing — AI 生成 Listing 内容
+   参数: {"product_id": "商品ID", "platform": "amazon/ebay/shopify/etsy/walmart", "language": "en/ja/es等"}
+   注意: 需要先有商品
+
+4. compliance_check — 合规审查
+   参数: {"text": "要检查的文本"}
+
+5. calculate_profit — 净利计算
+   参数: {"selling_price": 售价, "product_cost": 成本, "platform_fee_rate": 费率}
+
+6. answer — 回答用户问题（不需要执行操作时）
+   参数: {"message": "回答内容"}
+
+请分析用户的指令，返回 JSON 格式的执行计划：
+{
+    "summary": "对用户指令的理解",
+    "steps": [
+        {"action": "工具名", "params": {...}, "critical": true/false, "description": "这一步做什么"}
+    ]
+}
+
+只返回 JSON，不要额外文字。"""
+
+        result = await self.llm.generate(system_prompt, instruction, max_tokens=1000)
+        # 提取 JSON
+        match = re.search(r'\{.*\}', result, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+        return {"summary": "无法理解指令", "steps": [{"action": "answer", "params": {"message": "请更具体地描述你要做什么"}, "critical": False}]}
+
+    async def _execute_step(self, action: str, params: dict) -> dict:
+        """执行单个步骤"""
+        try:
+            if action == "scrape_1688":
+                return await self._do_scrape(params)
+            elif action == "create_product":
+                return await self._do_create_product(params)
+            elif action == "generate_listing":
+                return await self._do_generate_listing(params)
+            elif action == "compliance_check":
+                return await self._do_compliance(params)
+            elif action == "calculate_profit":
+                return await self._do_calculate_profit(params)
+            elif action == "answer":
+                return {"action": action, "status": "success", "result": params.get("message", "")}
+            else:
+                return {"action": action, "status": "failed", "error": f"未知操作: {action}"}
+        except Exception as e:
+            return {"action": action, "status": "failed", "error": str(e)}
+
+    async def _do_scrape(self, params: dict) -> dict:
+        """执行 1688 抓取"""
+        url = params.get("url", "")
+        if not url:
+            return {"action": "scrape_1688", "status": "failed", "error": "缺少URL"}
+
+        # 从数据库读取 API Key 配置
+        from app.models.system_config import SystemConfig
+        config_rows = await self.db.execute(
+            select(SystemConfig).where(
+                SystemConfig.key.in_(["onebound_api_key", "onebound_api_secret"])
+            )
+        )
+        sys_config = {row.key: row.value or "" for row in config_rows.scalars().all()}
+
+        data = await scrape_1688(
+            url,
+            api_key=sys_config.get("onebound_api_key", ""),
+            api_secret=sys_config.get("onebound_api_secret", ""),
+        )
+
+        # 自动创建商品
+        product_data = {
+            "url": data["url"],
+            "title": data.get("title"),
+            "main_image_url": data.get("main_image_url"),
+            "price": data.get("price"),
+            "sales_count": data.get("sales_count"),
+            "shop_name": data.get("shop_name"),
+        }
+
+        return {
+            "action": "scrape_1688",
+            "status": "success",
+            "data": product_data,
+            "summary": f"已抓取商品：{data.get('title', '未知')}（¥{data.get('price', '?')}）",
+        }
+
+    async def _do_create_product(self, params: dict) -> dict:
+        """创建商品到数据库"""
+        from app.models.product import Product
+        from uuid import UUID
+
+        # 查重
+        result = await self.db.execute(
+            select(Product).where(Product.url == params.get("url", ""))
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            return {
+                "action": "create_product",
+                "status": "success",
+                "product_id": str(existing.id),
+                "summary": f"商品已存在：{existing.title}",
+            }
+
+        product = Product(
+            user_id=self.user.id,
+            url=params.get("url", ""),
+            title=params.get("title"),
+            main_image_url=params.get("main_image_url"),
+            price=params.get("price"),
+            sales_count=params.get("sales_count"),
+            shop_name=params.get("shop_name"),
+        )
+        self.db.add(product)
+        await self.db.flush()
+
+        return {
+            "action": "create_product",
+            "status": "success",
+            "product_id": str(product.id),
+            "summary": f"已创建商品：{product.title}",
+        }
+
+    async def _do_generate_listing(self, params: dict) -> dict:
+        """AI 生成 Listing"""
+        from app.services.ai.deepseek import DeepSeekService
+        from app.models.product import Product
+        from uuid import UUID
+
+        product_id = params.get("product_id", "")
+        platform = params.get("platform", "amazon")
+        language = params.get("language", "en")
+
+        try:
+            result = await self.db.execute(select(Product).where(Product.id == UUID(product_id)))
+        except ValueError:
+            return {"action": "generate_listing", "status": "failed", "error": "无效的商品ID"}
+
+        product = result.scalar_one_or_none()
+        if not product:
+            return {"action": "generate_listing", "status": "failed", "error": "商品不存在"}
+
+        llm = DeepSeekService()
+        title = await llm.generate(
+            f"You are an expert {platform} listing copywriter.",
+            f"Generate a compelling product title for {platform} (max 200 chars):\nProduct: {product.title}",
+            max_tokens=300,
+        )
+        description = await llm.generate_product_description(
+            product_title=product.title or "",
+            platform=platform,
+        )
+        bullets = await llm.generate_bullet_points(
+            product_title=product.title or "",
+            features=f"Price: {product.price}" if product.price else "",
+            platform=platform,
+        )
+
+        return {
+            "action": "generate_listing",
+            "status": "success",
+            "data": {"title": title, "description": description, "bullet_points": bullets},
+            "summary": f"已为 {platform} 生成 Listing：{title[:50]}...",
+        }
+
+    async def _do_compliance(self, params: dict) -> dict:
+        """合规审查"""
+        from app.routers.shopify import compliance_check
+        text = params.get("text", "")
+        violations = compliance_check(text)
+        passed = len(violations) == 0
+        return {
+            "action": "compliance_check",
+            "status": "success",
+            "data": {"passed": passed, "violations": violations},
+            "summary": "合规审查通过" if passed else f"发现违禁词：{', '.join(violations)}",
+        }
+
+    async def _do_calculate_profit(self, params: dict) -> dict:
+        """净利计算"""
+        selling_price = float(params.get("selling_price", 0))
+        product_cost = float(params.get("product_cost", 0))
+        platform_fee_rate = float(params.get("platform_fee_rate", 0.15))
+        shipping_cost = float(params.get("shipping_cost", 0))
+        exchange_rate = float(params.get("exchange_rate", 7.2))
+
+        price_cny = selling_price * exchange_rate
+        platform_fee = price_cny * platform_fee_rate
+        total_cost = platform_fee + product_cost + shipping_cost
+        net_profit = price_cny - total_cost
+        margin = (net_profit / price_cny * 100) if price_cny > 0 else 0
+
+        return {
+            "action": "calculate_profit",
+            "status": "success",
+            "data": {
+                "selling_price_cny": round(price_cny, 2),
+                "net_profit": round(net_profit, 2),
+                "profit_margin": round(margin, 1),
+            },
+            "summary": f"净利：¥{round(net_profit, 2)}，利润率：{round(margin, 1)}%",
+        }
+
+    def _build_summary(self) -> dict:
+        """汇总执行结果"""
+        success_steps = [s for s in self.steps if s["status"] == "success"]
+        failed_steps = [s for s in self.steps if s["status"] == "failed"]
+
+        if not failed_steps:
+            status = "success"
+            summary = "全部完成！" + " ".join(s.get("summary", "") for s in success_steps)
+        elif success_steps:
+            status = "partial"
+            summary = "部分完成。成功：" + str(len(success_steps)) + "步，失败：" + str(len(failed_steps)) + "步"
+        else:
+            status = "failed"
+            summary = failed_steps[0].get("error", "执行失败")
+
+        return {
+            "summary": summary,
+            "status": status,
+            "steps": self.steps,
+        }

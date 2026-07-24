@@ -15,7 +15,7 @@ from sqlalchemy.exc import DataError, IntegrityError
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.routers import auth, users, products, content, images, billing, shopify, batch, radar, ledger, analytics
+from app.routers import auth, users, products, content, images, billing, shopify, batch, radar, ledger, analytics, agent
 from app.routers import settings as settings_router
 
 # ── 日志配置 ──────────────────────────────────────────────────
@@ -153,6 +153,7 @@ app.include_router(batch.router, prefix=API_PREFIX)
 app.include_router(radar.router, prefix=API_PREFIX)
 app.include_router(ledger.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
+app.include_router(agent.router, prefix=API_PREFIX)
 
 
 # --- Health Check ---
