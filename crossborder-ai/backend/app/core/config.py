@@ -110,7 +110,7 @@ class Settings(BaseSettings):
 
     # --- DeepSeek ---
     DEEPSEEK_API_KEY: Optional[str] = None
-    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MODEL: str = "deepseek-v4-flash"  # 2026年7月更新：deepseek-chat 已弃用，改用 v4 系列
     DEEPSEEK_TEMPERATURE: float = 0.7
 
     # --- Replicate ---

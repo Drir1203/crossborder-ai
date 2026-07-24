@@ -77,7 +77,16 @@ class AgentOrchestrator:
         """
         system_prompt = """你是一个跨境电商 AI 助手，负责将用户的自然语言指令转为执行计划。
 
-可用工具（action列表）：
+【核心规则】
+- 你必须选择具体的工具来执行，不能只是回答问题
+- 如果用户没有明确说要做什么，引导用户使用工具
+- 用户提到商品链接 → 用 scrape_1688
+- 用户提到生成/发布/上架 → 用 generate_listing
+- 用户提到利润/成本/计算 → 用 calculate_profit
+- 用户提到检查/审核 → 用 compliance_check
+- 不要使用 "answer" 工具，永远用具体工具
+
+可用工具：
 1. scrape_1688 — 抓取1688商品
    参数: {"url": "1688商品链接"}
    输出: 商品标题、价格、图片
@@ -96,8 +105,9 @@ class AgentOrchestrator:
 5. calculate_profit — 净利计算
    参数: {"selling_price": 售价, "product_cost": 成本, "platform_fee_rate": 费率}
 
-6. answer — 回答用户问题（不需要执行操作时）
+6. answer — 【仅当其他工具都不适用时】回答用户问题
    参数: {"message": "回答内容"}
+   注意: 这是最后选项，优先用上面的工具
 
 请分析用户的指令，返回 JSON 格式的执行计划：
 {
@@ -133,7 +143,8 @@ class AgentOrchestrator:
             elif action == "calculate_profit":
                 return await self._do_calculate_profit(params)
             elif action == "answer":
-                return {"action": action, "status": "success", "result": params.get("message", "")}
+                msg = params.get("message", "")
+                return {"action": action, "status": "success", "result": msg, "summary": msg[:100]}
             else:
                 return {"action": action, "status": "failed", "error": f"未知操作: {action}"}
         except Exception as e:
