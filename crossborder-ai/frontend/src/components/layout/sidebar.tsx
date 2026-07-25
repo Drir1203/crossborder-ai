@@ -15,6 +15,7 @@ import {
   Upload,
   Radar,
   Calculator,
+  Bot,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ export function Sidebar() {
     { icon: Package, label: t('nav.products'), path: '/products' },
     { icon: FileText, label: t('nav.listings'), path: '/listings' },
     { icon: Sparkles, label: t('nav.content'), path: '/content' },
+    { icon: Bot, label: t('nav.agent'), path: '/agent' },
     { icon: Image, label: t('nav.images'), path: '/images' },
     { icon: Upload, label: t('nav.batch'), path: '/batch' },
     { icon: Radar, label: t('nav.radar'), path: '/radar' },

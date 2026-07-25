@@ -1,0 +1,251 @@
+import { useState, useRef, useEffect } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Bot,
+  Send,
+  User,
+  Loader2,
+  Sparkles,
+  Link as LinkIcon,
+  ShoppingCart,
+  Globe,
+  DollarSign,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+} from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import apiClient from '@/api/client'
+
+/**
+ * AgentPage - AI 智能助手聊天页
+ *
+ * 像 ChatGPT 一样对话，但背后执行的是真实的业务操作。
+ * 跨境卖家直接说需求，Agent 自动完成。
+ */
+
+// ── 消息类型 ──────────────────────────────────────────────────
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  steps?: Array<{ action: string; status: string; summary?: string; error?: string }>
+  actionResults?: Array<{ action: string; status: string; summary?: string; error?: string }>
+  timestamp: Date
+}
+
+// ── 快捷指令 ──────────────────────────────────────────────────
+const QUICK_ACTIONS = [
+  { icon: LinkIcon, label: '抓取 1688', prompt: '帮我抓取这个1688商品：https://detail.1688.com/offer/' },
+  { icon: Sparkles, label: '生成 Listing', prompt: '帮我为商品生成 Amazon Listing，英文' },
+  { icon: DollarSign, label: '计算利润', prompt: '售价$19.99，成本¥30，运费¥15，帮我算净利' },
+  { icon: Globe, label: '合规检查', prompt: '检查这段文本有没有违禁词：' },
+]
+
+export default function AgentPage() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: 'assistant',
+      content: '你好！我是你的跨境电商 AI 助手。\n\n你可以：\n📦 **粘贴 1688 链接** → 自动抓取商品\n✍️ **说"生成 Listing"** → AI 写标题描述\n💰 **说"算利润"** → 自动计算净利\n\n需要我做什么？直接告诉我就好。',
+      timestamp: new Date(),
+    },
+  ])
+  const [input, setInput] = useState('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // 自动滚动到底部
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // Agent 执行
+  const agentMutation = useMutation({
+    mutationFn: async (instruction: string) => {
+      const res = await apiClient.post('/agent/run', { instruction })
+      return res.data
+    },
+    onSuccess: (data) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.summary || '已完成',
+          actionResults: data.steps,
+          timestamp: new Date(),
+        },
+      ])
+    },
+    onError: (err: any) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `❌ ${err?.response?.data?.detail || '执行失败，请重试'}`,
+          timestamp: new Date(),
+        },
+      ])
+    },
+  })
+
+  const handleSend = () => {
+    if (!input.trim() || agentMutation.isPending) return
+    const msg = input.trim()
+
+    // 添加用户消息
+    setMessages((prev) => [...prev, { role: 'user', content: msg, timestamp: new Date() }])
+    setInput('')
+
+    // 执行 Agent
+    agentMutation.mutate(msg)
+  }
+
+  // 快捷指令点击
+  const handleQuickAction = (prompt: string) => {
+    setInput(prompt)
+  }
+
+  // 渲染消息
+  const renderMessage = (msg: Message, i: number) => {
+    const isUser = msg.role === 'user'
+    return (
+      <motion.div
+        key={i}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}
+      >
+        {/* 头像 */}
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+          isUser ? 'bg-primary' : 'bg-amber-500'
+        }`}>
+          {isUser ? <User className="h-4 w-4 text-primary-foreground" /> : <Bot className="h-4 w-4 text-white" />}
+        </div>
+
+        {/* 消息内容 */}
+        <div className={`max-w-[80%] space-y-2 ${isUser ? 'items-end' : ''}`}>
+          <div className={`rounded-2xl px-4 py-3 text-sm ${
+            isUser
+              ? 'bg-primary text-primary-foreground rounded-tr-[4px]'
+              : 'bg-muted rounded-tl-[4px]'
+          }`}>
+            <div className="whitespace-pre-wrap">{msg.content}</div>
+          </div>
+
+          {/* 执行步骤 */}
+          {msg.actionResults && msg.actionResults.length > 0 && (
+            <Card className="p-3 space-y-2 text-sm bg-background border">
+              {msg.actionResults.map((step, j) => (
+                <div key={j} className="flex items-start gap-2">
+                  {step.status === 'success' ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                  ) : step.status === 'failed' ? (
+                    <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin mt-0.5 shrink-0" />
+                  )}
+                  <div>
+                    <span className="font-medium text-xs">{actionLabel(step.action)}</span>
+                    {step.summary && <p className="text-xs text-muted-foreground">{step.summary}</p>}
+                    {step.error && <p className="text-xs text-destructive">{step.error}</p>}
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+        </div>
+      </motion.div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-6rem)] max-w-3xl mx-auto">
+      {/* ── 聊天消息区 ────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto space-y-4 px-4 py-4">
+        <AnimatePresence>
+          {messages.map((msg, i) => renderMessage(msg, i))}
+        </AnimatePresence>
+
+        {/* 加载中 */}
+        {agentMutation.isPending && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex gap-3"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500">
+              <Bot className="h-4 w-4 text-white" />
+            </div>
+            <div className="bg-muted rounded-2xl rounded-tl-[4px] px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                正在分析并执行...
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* ── 快捷指令（仅首条消息时显示） ────────────────── */}
+      {messages.length === 1 && (
+        <div className="px-4 pb-2">
+          <div className="flex flex-wrap gap-2">
+            {QUICK_ACTIONS.map((action, i) => (
+              <Button
+                key={i}
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleQuickAction(action.prompt)}
+              >
+                <action.icon className="h-3.5 w-3.5" />
+                {action.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── 输入框 ────────────────────────────────────────── */}
+      <div className="border-t bg-background px-4 py-3">
+        <div className="flex gap-2">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            placeholder="粘贴 1688 链接，或直接告诉我需求..."
+            className="flex-1 h-11 rounded-xl border bg-muted px-4 text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+            disabled={agentMutation.isPending}
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!input.trim() || agentMutation.isPending}
+            className="h-11 w-11 rounded-xl"
+            size="icon"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1.5 text-center">
+          AI 会自动识别你要做什么：抓商品、写 Listing、算利润
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ── 操作名称映射 ──────────────────────────────────────────────
+function actionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    scrape_1688: '抓取 1688 商品',
+    create_product: '创建商品',
+    generate_listing: 'AI 生成 Listing',
+    compliance_check: '合规审查',
+    calculate_profit: '净利计算',
+    answer: '回答',
+  }
+  return labels[action] || action
+}

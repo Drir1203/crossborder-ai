@@ -8,6 +8,7 @@
     "products": "商品管理",
     "listings": "Listing 管理",
     "content": "AI 文案",
+    "agent": "AI 助手",
     "images": "AI 图片",
     "batch": "批量任务",
     "radar": "竞品分析",
@@ -25,7 +26,7 @@
   },
   "dashboard": {
     "welcome": "欢迎回来",
-    "overview": "这是您的跨境电商 AI 销售概览",
+    "overview": "今天想做什么？告诉我商品链接或直接说需求",
     "generateContent": "生成内容",
     "availableCredits": "可用积分",
     "plan": "当前套餐",

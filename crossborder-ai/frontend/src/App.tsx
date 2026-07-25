@@ -18,6 +18,7 @@ import ShopifyPage from '@/pages/shopify/ShopifyPage'
 import BatchPage from '@/pages/batch/BatchPage'
 import RadarPage from '@/pages/radar/RadarPage'
 import LedgerPage from '@/pages/ledger/LedgerPage'
+import AgentPage from '@/pages/agent/AgentPage'
 import { useAuthStore } from '@/stores/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -44,6 +45,7 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="agent" element={<AgentPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="products/:id" element={<ProductDetailPage />} />
         <Route path="listings" element={<ListingsPlaceholder />} />

@@ -8,6 +8,7 @@
     "products": "Products",
     "listings": "Listings",
     "content": "AI Content",
+    "agent": "AI Assistant",
     "images": "AI Images",
     "batch": "Batch",
     "radar": "Radar",
@@ -25,7 +26,7 @@
   },
   "dashboard": {
     "welcome": "Welcome back",
-    "overview": "Here's your cross-border AI selling overview",
+    "overview": "What would you like to do today? Paste a product link or tell me what you need",
     "generateContent": "Generate Content",
     "availableCredits": "Available Credits",
     "plan": "plan",
