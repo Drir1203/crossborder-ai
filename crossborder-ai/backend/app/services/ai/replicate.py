@@ -7,7 +7,7 @@ using the black-forest-labs/flux-schnell model.
 from typing import Any, Dict, List, Optional
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.core.config import settings
 
@@ -44,9 +44,11 @@ class ReplicateService:
             f"sharp focus, commercial photography."
         )
 
+    # 仅重试网络连接错误（超时、断连），不重试 HTTP 业务错误（402余额不足、429限流）
     @retry(
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=2, max=8),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout)),
     )
     async def generate_image(
         self,
@@ -87,6 +89,17 @@ class ReplicateService:
                 headers=self._build_headers(),
                 json={"input": input_data},
             )
+
+            # 处理各种错误状态码
+            if response.status_code == 402:
+                raise RuntimeError(
+                    "Replicate 账户余额不足，请前往 https://replicate.com/account/billing 充值"
+                )
+            if response.status_code == 429:
+                raise RuntimeError("图片生成服务繁忙（API 限流），请稍后重试")
+            if response.status_code == 401:
+                raise RuntimeError("图片生成服务认证失败，请联系管理员检查 API Key 配置")
+
             response.raise_for_status()
             prediction = response.json()
 

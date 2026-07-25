@@ -5,14 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import {
   Package,
-  FileText,
-  Sparkles,
   TrendingUp,
   ShoppingCart,
-  Globe,
-  ArrowRight,
-  CreditCard,
-  Link as LinkIcon,
   Bot,
   Loader2,
   CheckCircle2,
@@ -20,25 +14,36 @@ import {
   ChevronDown,
   ChevronRight,
   XCircle,
+  Clock,
+  DollarSign,
+  AlertTriangle,
+  CalendarDays,
+  MessageSquareText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/authStore'
 import apiClient from '@/api/client'
-import type { DashboardData } from '@/types'
 
-const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 },
-  },
-}
-
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 },
+/** 看板数据类型 */
+interface DashboardData {
+  products: {
+    total: number
+    this_month: number
+    pending: number
+  }
+  recent: Array<{
+    id: string
+    title: string
+    price: number | null
+    status: string
+    created_at: string
+  }>
+  credits: {
+    remaining: number
+    used: number
+  }
 }
 
 export default function DashboardPage() {
@@ -48,10 +53,26 @@ export default function DashboardPage() {
   const [input, setInput] = useState('')
   const [showAgentResult, setShowAgentResult] = useState(false)
 
-  // Agent 执行
+  // 看板数据
+  const { data: dashboard, isLoading } = useQuery<DashboardData>({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      const res = await apiClient.get('/analytics/dashboard')
+      return res.data
+    },
+  })
+
+  // 快捷跳转
+  const quickActions = [
+    { icon: ShoppingCart, label: '录入商品', path: '/products', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { icon: MessageSquareText, label: 'AI 生成', path: '/content', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    { icon: Bot, label: 'AI 助手', path: '/agent', color: 'text-violet-500', bg: 'bg-violet-500/10' },
+    { icon: DollarSign, label: '算利润', path: '/ledger', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  ]
+
+  // ── Agent 执行 ──────────────────────────────────────────
   const agentMutation = useMutation({
     mutationFn: async (instruction: string) => {
-      const { default: apiClient } = await import('@/api/client')
       const res = await apiClient.post('/agent/run', { instruction })
       return res.data
     },
@@ -60,232 +81,203 @@ export default function DashboardPage() {
 
   const handleSubmit = () => {
     if (!input.trim()) return
-    const val = input.trim()
-
-    // 如果是纯链接 → 还是跳转到商品页抓取（快速操作）
-    if (val.startsWith('http://') || val.startsWith('https://')) {
-      navigate(`/products?url=${encodeURIComponent(val)}`)
-      return
-    }
-
-    // 如果是简短输入（可能是商品名）→ 跳转搜索
-    if (val.length < 20 && !val.includes('帮我') && !val.includes('生成') && !val.includes('检查') && !val.includes('计算') && !val.includes('算')) {
-      navigate(`/products?q=${encodeURIComponent(val)}`)
-      return
-    }
-
-    // 自然语言指令 → 交给 AI Agent
     setShowAgentResult(false)
-    agentMutation.mutate(val)
+    agentMutation.mutate(input.trim())
   }
 
-  const { data: dashboard, isLoading } = useQuery<DashboardData>({
-    queryKey: ['dashboard'],
-    queryFn: async () => {
-      const response = await apiClient.get('/analytics/dashboard')
-      return response.data
-    },
-  })
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `${mins} 分钟前`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours} 小时前`
+    return `${Math.floor(hours / 24)} 天前`
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   const stats = [
     {
-      title: t('dashboard.products'),
+      title: '商品总数',
       value: dashboard?.products?.total ?? 0,
+      sub: `本月新增 ${dashboard?.products?.this_month ?? 0}`,
       icon: Package,
       color: 'text-blue-500',
       bg: 'bg-blue-500/10',
-      link: '/products',
     },
     {
-      title: t('dashboard.listings'),
-      value: dashboard?.listings?.total ?? 0,
-      icon: FileText,
-      color: 'text-violet-500',
-      bg: 'bg-violet-500/10',
-      link: '/listings',
+      title: '待处理',
+      value: dashboard?.products?.pending ?? 0,
+      sub: dashboard?.products?.pending ? '需要补充信息' : '已全部完善',
+      icon: AlertTriangle,
+      color: dashboard?.products?.pending ? 'text-amber-500' : 'text-emerald-500',
+      bg: dashboard?.products?.pending ? 'bg-amber-500/10' : 'bg-emerald-500/10',
     },
     {
-      title: t('dashboard.aiGenerations'),
-      value: dashboard?.content?.total_generations ?? 0,
-      icon: Sparkles,
-      color: 'text-amber-500',
-      bg: 'bg-amber-500/10',
-      link: '/content',
-    },
-    {
-      title: t('dashboard.published'),
-      value: dashboard?.listings?.published ?? 0,
-      icon: Globe,
+      title: '剩余积分',
+      value: dashboard?.credits?.remaining ?? 0,
+      sub: `已用 ${dashboard?.credits?.used ?? 0}`,
+      icon: DollarSign,
       color: 'text-emerald-500',
       bg: 'bg-emerald-500/10',
-      link: '/listings',
+    },
+    {
+      title: 'AI 助手',
+      value: '对话式',
+      sub: '一句话搞定操作',
+      icon: Bot,
+      color: 'text-violet-500',
+      bg: 'bg-violet-500/10',
     },
   ]
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
-      {/* Welcome */}
-      <motion.div variants={item}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              {t('dashboard.welcome')}{user?.username ? `, ${user.username}` : ''}! 👋
-            </h1>
-            <p className="text-muted-foreground">
-              {t('dashboard.overview')}
-            </p>
-          </div>
-          <Button onClick={() => navigate('/content')}>
-            <Sparkles className="mr-2 h-4 w-4" />
-            {t('dashboard.generateContent')}
-          </Button>
+    <div className="space-y-5">
+      {/* ── 头部 ──────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">
+            👋 你好, {user?.username || '卖家'}！
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            今天有什么要做的？
+          </p>
         </div>
-      </motion.div>
+        <Button onClick={() => navigate('/agent')} className="gap-2">
+          <Bot className="h-4 w-4" />
+          AI 助手
+        </Button>
+      </div>
 
-      {/* 中央输入框（AI Agent 入口） */}
-      <motion.div variants={item}>
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <div className="relative flex-1">
-                <Bot className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
-                <input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  placeholder="告诉我要做什么：抓取商品、生成Listing、计算利润..."
-                  className="flex h-12 w-full rounded-md border bg-background pl-10 pr-4 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                />
-              </div>
-              <Button className="h-12 px-6" onClick={handleSubmit} disabled={agentMutation.isPending}>
-                {agentMutation.isPending ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />执行中...</>
-                ) : (
-                  <><Bot className="mr-2 h-4 w-4" />AI 执行</>
-                )}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              例：「帮我抓取这个1688商品并生成Amazon Listing」 ｜ 「售价$19.99，成本¥30，算下净利」
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Agent 执行结果 */}
-      {agentMutation.isPending && (
-        <motion.div variants={item}>
-          <Card>
-            <CardContent className="flex items-center justify-center py-8 gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">AI 正在分析并执行你的指令...</span>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
-      {agentMutation.data && showAgentResult && (
-        <motion.div variants={item}>
-          <AgentResult data={agentMutation.data} />
-        </motion.div>
-      )}
-
-      {/* Credit Bar */}
-      <motion.div variants={item}>
-        <Card className="bg-gradient-to-r from-primary/10 via-primary/5 to-background border-primary/20">
-          <CardContent className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <CreditCard className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-sm font-medium">{t('dashboard.availableCredits')}</p>
-                <p className="text-2xl font-bold">
-                  {user?.credits_remaining ?? 0}
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {' / '}{user?.credits_total ?? 0}
-                  </span>
-                </p>
-              </div>
-            </div>
-            <Badge variant="secondary" className="capitalize">
-              {user?.plan} {t('dashboard.plan')}
-            </Badge>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Stats Grid */}
-      <motion.div variants={item} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="cursor-pointer transition-colors hover:bg-accent/50"
-            onClick={() => navigate(stat.link)}
+      {/* ── 快捷入口 ──────────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-3">
+        {quickActions.map((action) => (
+          <Card
+            key={action.label}
+            className="cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5"
+            onClick={() => navigate(action.path)}
           >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <div className={`rounded-lg p-2 ${stat.bg}`}>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+            <CardContent className="flex flex-col items-center gap-2 py-4">
+              <div className={`rounded-lg p-2.5 ${action.bg}`}>
+                <action.icon className={`h-5 w-5 ${action.color}`} />
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <span className="text-xs font-medium">{action.label}</span>
             </CardContent>
           </Card>
         ))}
-      </motion.div>
+      </div>
 
-      {/* Quick Actions */}
-      <motion.div variants={item} className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-primary" />
-              {t('dashboard.quickActions')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/products')}>
-              {t('dashboard.addProduct')} <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/content')}>
-              {t('dashboard.generateListing')} <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/images')}>
-              {t('dashboard.generateImage')} <ArrowRight className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
+      {/* ── 统计卡片 ──────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {stats.map((s) => (
+          <Card key={s.title}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">{s.title}</p>
+                  <p className="text-2xl font-bold mt-0.5">{s.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
+                </div>
+                <div className={`rounded-lg p-2 ${s.bg}`}>
+                  <s.icon className={`h-4 w-4 ${s.color}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              {t('dashboard.recentActivity')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-              <TrendingUp className="mb-2 h-8 w-8" />
-              <p className="text-sm">{t('dashboard.activityEmpty')}</p>
-              <p className="text-xs">{t('dashboard.activityHint')}</p>
+      {/* ── AI 输入框（快捷指令） ──────────────────────────── */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4">
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+              placeholder="粘贴 1688 链接，或说"帮我算利润""...
+              className="flex-1 h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary/40"
+            />
+            <Button onClick={handleSubmit} disabled={!input.trim() || agentMutation.isPending} className="h-10 px-4">
+              {agentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+            </Button>
+          </div>
+          <div className="flex gap-2 mt-2">
+            {['帮我算利润', '检查合规', '抓取商品'].map((hint) => (
+              <button
+                key={hint}
+                className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md border hover:bg-accent"
+                onClick={() => { setInput(hint); handleSubmit() }}
+              >
+                {hint}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Agent 结果 */}
+      {agentMutation.data && showAgentResult && (
+        <AgentResult data={agentMutation.data} onClose={() => setShowAgentResult(false)} />
+      )}
+
+      {/* ── 最近操作 ──────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            最近操作
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dashboard?.recent && dashboard.recent.length > 0 ? (
+            <div className="space-y-2">
+              {dashboard.recent.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 cursor-pointer text-sm"
+                  onClick={() => navigate(`/products/${p.id}`)}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {p.status === '待补充' ? (
+                      <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    )}
+                    <span className="truncate">{p.title}</span>
+                    {p.price != null && <span className="text-muted-foreground shrink-0">¥{p.price}</span>}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0 ml-2">{timeAgo(p.created_at)}</span>
+                </div>
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    </motion.div>
+          ) : (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              还没有商品，点击上方「录入商品」开始
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
 /**
- * AgentResult - AI 智能助手执行结果展示
+ * AgentResult - AI 智能助手执行结果
  */
-function AgentResult({ data }: { data: { summary: string; status: string; steps: Array<{action: string; status: string; summary?: string; error?: string; data?: any}> } }) {
+function AgentResult({ data, onClose }: { data: any; onClose: () => void }) {
   const [expanded, setExpanded] = useState(false)
 
   const statusIcon = (s: string) => {
-    if (s === 'success') return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-    if (s === 'failed') return <XCircle className="h-4 w-4 text-destructive" />
-    return <Loader2 className="h-4 w-4 animate-spin" />
+    if (s === 'success') return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+    if (s === 'failed') return <XCircle className="h-4 w-4 text-destructive shrink-0" />
+    return <Loader2 className="h-4 w-4 animate-spin shrink-0" />
   }
 
   const actionLabel = (a: string) => {
@@ -301,37 +293,39 @@ function AgentResult({ data }: { data: { summary: string; status: string; steps:
   }
 
   return (
-    <Card className={`${data.status === 'success' ? 'border-emerald-500/30' : data.status === 'partial' ? 'border-amber-500/30' : 'border-destructive/30'}`}>
-      <CardHeader className="pb-3">
+    <Card className={`${data.status === 'success' ? 'border-emerald-500/30' : 'border-destructive/30'}`}>
+      <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-2">
             {data.status === 'success' ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5" />
-            ) : data.status === 'partial' ? (
-              <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
             ) : (
               <XCircle className="h-5 w-5 text-destructive mt-0.5" />
             )}
             <div>
-              <CardTitle className="text-sm">AI 智能助手</CardTitle>
-              <p className="text-sm mt-1">{data.summary}</p>
+              <p className="text-sm font-medium">AI 执行结果</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{data.summary}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setExpanded(!expanded)}>
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setExpanded(!expanded)}>
+              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={onClose}>
+              <XCircle className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
-      {expanded && (
-        <CardContent className="space-y-2 pt-0">
-          <div className="border-t" />
-          {data.steps.map((step, i) => (
-            <div key={i} className="flex items-start gap-2 py-1 text-sm">
+      {expanded && data.steps && (
+        <CardContent className="space-y-1.5 pt-0">
+          {data.steps.map((step: any, i: number) => (
+            <div key={i} className="flex items-start gap-2 text-sm">
               {statusIcon(step.status)}
-              <div className="flex-1">
-                <span className="font-medium">{actionLabel(step.action)}</span>
-                {step.summary && <p className="text-muted-foreground text-xs mt-0.5">{step.summary}</p>}
-                {step.error && <p className="text-destructive text-xs mt-0.5">{step.error}</p>}
+              <div>
+                <span className="text-xs font-medium">{actionLabel(step.action)}</span>
+                {step.summary && <p className="text-xs text-muted-foreground">{step.summary}</p>}
+                {step.error && <p className="text-xs text-destructive">{step.error}</p>}
               </div>
             </div>
           ))}
