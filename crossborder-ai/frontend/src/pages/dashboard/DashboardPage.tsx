@@ -201,7 +201,7 @@ export default function DashboardPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder="粘贴 1688 链接，或说"帮我算利润""...
+              placeholder={'粘贴 1688 链接，或说「帮我算利润」...'}
               className="flex-1 h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary/40"
             />
             <Button onClick={handleSubmit} disabled={!input.trim() || agentMutation.isPending} className="h-10 px-4">

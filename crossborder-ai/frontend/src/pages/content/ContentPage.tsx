@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Sparkles, Copy, CheckCircle2, Loader2, AlertCircle, Package, Globe, Image as ImageIcon } from 'lucide-react'
+import { Sparkles, Copy, CheckCircle2, Loader2, AlertCircle, Package, Globe, Image as ImageIcon, ShoppingBag, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,6 +83,7 @@ export default function ContentPage() {
   const [expertMode, setExpertMode] = useState(false)
   const [customTone, setCustomTone] = useState('')
   const [copied, setCopied] = useState('')
+  const [selectedChannel, setSelectedChannel] = useState('')
 
   // 商品列表
   const { data: products } = useQuery({
@@ -92,6 +93,31 @@ export default function ContentPage() {
       return res.data.items as Product[]
     },
   })
+
+  // Shopify 店铺列表
+  const { data: channels } = useQuery({
+    queryKey: ['shopify-channels'],
+    queryFn: async () => {
+      const res = await apiClient.get('/shopify/channels')
+      return res.data
+    },
+  })
+
+  // 发布到 Shopify
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post('/shopify/push', {
+        product_id: selectedProduct,
+        channel_id: selectedChannel,
+      })
+      return res.data
+    },
+  })
+
+  const handlePublish = () => {
+    if (!selectedProduct || !selectedChannel) return
+    publishMutation.mutate()
+  }
 
   // AI 生成
   const generateMutation = useMutation({
@@ -387,6 +413,51 @@ export default function ContentPage() {
                 </Card>
               )}
             </>
+          )}
+
+          {generateMutation.data && channels && channels.length > 0 && (
+            <Card className="border-emerald-500/20 bg-emerald-500/5">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-emerald-500" />
+                  发布到 Shopify
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <select
+                  value={selectedChannel}
+                  onChange={(e) => setSelectedChannel(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">-- 选择店铺 --</option>
+                  {channels.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.shop_name}</option>
+                  ))}
+                </select>
+                <Button
+                  className="w-full"
+                  disabled={!selectedChannel || publishMutation.isPending}
+                  onClick={handlePublish}
+                >
+                  {publishMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />发布中...</>
+                  ) : (
+                    <><ShoppingBag className="mr-2 h-4 w-4" />发布到 Shopify</>
+                  )}
+                </Button>
+                {publishMutation.data && (
+                  <p className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4" />{publishMutation.data.message}
+                  </p>
+                )}
+                {publishMutation.error && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {(publishMutation.error as any)?.response?.data?.detail?.message?.substring?.(0, 100) || '发布失败'}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {!generateMutation.data && !generateMutation.isPending && (
