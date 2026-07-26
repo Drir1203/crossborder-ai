@@ -48,7 +48,7 @@ export default function AgentPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: '你好！我是你的跨境电商 AI 助手。\n\n你可以：\n📦 **粘贴 1688 链接** → 自动抓取商品\n✍️ **说"生成 Listing"** → AI 写标题描述\n💰 **说"算利润"** → 自动计算净利\n\n需要我做什么？直接告诉我就好。',
+      content: '你好！我是你的跨境电商 AI 助手。\n\n你可以：\n📦 **说"帮我创建商品"** → 手动或抓取录入商品\n✍️ **说"生成 Listing"** → AI 写标题描述\n💰 **说"算利润"** → 自动计算净利\n\n需要我做什么？直接告诉我就好。',
       timestamp: new Date(),
     },
   ])

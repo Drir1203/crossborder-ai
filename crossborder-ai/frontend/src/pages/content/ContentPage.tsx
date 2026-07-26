@@ -412,6 +412,39 @@ export default function ContentPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* 原文对照 */}
+              {selected && language !== 'zh' && (
+                <Card className="border-blue-500/20 bg-blue-500/5">
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2 text-blue-600">
+                      <Globe className="h-4 w-4" />
+                      原文 vs 译文对照
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground">原文（中文）</p>
+                        <div className="rounded-lg border bg-background p-3 space-y-1">
+                          <p className="text-sm font-medium">{selected.title || '-'}</p>
+                          {selected.price != null && <p className="text-xs text-muted-foreground">价格：¥{selected.price}</p>}
+                          {selected.shop_name && <p className="text-xs text-muted-foreground">店铺：{selected.shop_name}</p>}
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground">译文（{language.toUpperCase()}）</p>
+                        <div className="rounded-lg border bg-background p-3 space-y-1">
+                          <p className="text-sm font-medium">{generateMutation.data.title || '-'}</p>
+                          {generateMutation.data.bullet_points?.slice(0, 3).map((b: string, i: number) => (
+                            <p key={i} className="text-xs text-muted-foreground">• {b}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
 

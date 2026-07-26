@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { LogOut, User, Settings, CreditCard, ChevronDown, Globe, Palette } from 'lucide-react'
+import { LogOut, User, Settings, CreditCard, ChevronDown, Globe, Palette, Store } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -12,7 +12,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
+import { useStoreStore } from '@/stores/storeStore'
 import { Badge } from '@/components/ui/badge'
+import apiClient from '@/api/client'
 import { themes, getTheme, applyTheme, Theme } from '@/utils/themes'
 
 const LANGUAGES = [
@@ -32,6 +34,24 @@ export function Header() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme)
+  const { stores, currentStoreId, setStores, setCurrentStore } = useStoreStore()
+
+  // 加载店铺列表
+  useQuery({
+    queryKey: ['header-shopify-channels'],
+    queryFn: async () => {
+      const r = await apiClient.get('/shopify/channels')
+      const channels = (r.data || []).map((c: any) => ({
+        id: c.id,
+        name: c.shop_name,
+        platform: 'shopify' as const,
+      }))
+      if (channels.length > 0) setStores(channels)
+      return channels
+    },
+    enabled: !!user,
+    retry: false,
+  })
 
   const switchTheme = (theme: Theme) => {
     setCurrentTheme(theme)
@@ -113,6 +133,34 @@ export function Header() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* 店铺切换 */}
+        {stores.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="flex items-center gap-1.5 px-2 text-muted-foreground">
+                <Store className="h-4 w-4" />
+                <span className="hidden text-xs md:inline-block">
+                  {stores.find(s => s.id === currentStoreId)?.name || '选择店铺'}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">切换店铺</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {stores.map((s) => (
+                <DropdownMenuItem
+                  key={s.id}
+                  className={currentStoreId === s.id ? 'bg-accent font-medium' : ''}
+                  onClick={() => setCurrentStore(s.id)}
+                >
+                  <Store className="mr-2 h-3.5 w-3.5" />
+                  {s.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Credits badge */}
         {user && (
           <Badge variant="secondary" className="gap-1 px-2 py-1 text-xs whitespace-nowrap">
@@ -145,11 +193,11 @@ export function Header() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
+            <DropdownMenuItem onClick={() => navigate('/app/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               {t('header.settings')}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/billing')}>
+            <DropdownMenuItem onClick={() => navigate('/app/billing')}>
               <CreditCard className="mr-2 h-4 w-4" />
               {t('header.billing')}
             </DropdownMenuItem>

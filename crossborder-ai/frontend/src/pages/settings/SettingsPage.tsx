@@ -157,7 +157,7 @@ function ScrapingConfig() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-base"><Globe className="h-4 w-4" />1688 数据接口</span>
+          <span className="flex items-center gap-2 text-base"><Globe className="h-4 w-4" />商品数据接口</span>
           <Badge variant={data?.configured ? 'success' : 'warning'}>{data?.configured ? '已配置' : '未配置'}</Badge>
         </CardTitle>
       </CardHeader>

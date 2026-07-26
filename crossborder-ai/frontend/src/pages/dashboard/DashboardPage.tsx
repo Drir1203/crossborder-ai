@@ -64,10 +64,10 @@ export default function DashboardPage() {
 
   // 快捷跳转
   const quickActions = [
-    { icon: ShoppingCart, label: '录入商品', path: '/products', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { icon: MessageSquareText, label: 'AI 生成', path: '/content', color: 'text-amber-500', bg: 'bg-amber-500/10' },
-    { icon: Bot, label: 'AI 助手', path: '/agent', color: 'text-violet-500', bg: 'bg-violet-500/10' },
-    { icon: DollarSign, label: '算利润', path: '/ledger', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { icon: ShoppingCart, label: '录入商品', path: '/app/products', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { icon: MessageSquareText, label: 'AI 生成', path: '/app/content', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    { icon: Bot, label: 'AI 助手', path: '/app/agent', color: 'text-violet-500', bg: 'bg-violet-500/10' },
+    { icon: DollarSign, label: '算利润', path: '/app/ledger', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
   ]
 
   // ── Agent 执行 ──────────────────────────────────────────
@@ -149,7 +149,7 @@ export default function DashboardPage() {
             今天有什么要做的？
           </p>
         </div>
-        <Button onClick={() => navigate('/agent')} className="gap-2">
+        <Button onClick={() => navigate('/app/agent')} className="gap-2">
           <Bot className="h-4 w-4" />
           AI 助手
         </Button>
@@ -201,7 +201,7 @@ export default function DashboardPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder={'粘贴 1688 链接，或说「帮我算利润」...'}
+              placeholder={'粘贴商品链接，或说「帮我算利润」...'}
               className="flex-1 h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary/40"
             />
             <Button onClick={handleSubmit} disabled={!input.trim() || agentMutation.isPending} className="h-10 px-4">
@@ -242,7 +242,7 @@ export default function DashboardPage() {
                 <div
                   key={p.id}
                   className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 cursor-pointer text-sm"
-                  onClick={() => navigate(`/products/${p.id}`)}
+                  onClick={() => navigate(`/app/products/${p.id}`)}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {p.status === '待补充' ? (

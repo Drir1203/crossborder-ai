@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -12,6 +12,8 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -55,6 +57,15 @@ export default function ProductDetailPage() {
     enabled: !!id,
   })
 
+  // 删除商品
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient.delete(`/products/${id}`)
+    },
+    onSuccess: () => navigate('/app/products'),
+  })
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-20">
@@ -68,7 +79,7 @@ export default function ProductDetailPage() {
       <div className="flex flex-col items-center py-20 text-muted-foreground">
         <ShoppingBag className="h-12 w-12 mb-4 opacity-50" />
         <p>商品不存在</p>
-        <Button variant="link" onClick={() => navigate('/products')}>返回商品列表</Button>
+        <Button variant="link" onClick={() => navigate('/app/products')}>返回商品列表</Button>
       </div>
     )
   }
@@ -76,7 +87,7 @@ export default function ProductDetailPage() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       {/* 返回按钮 */}
-      <Button variant="ghost" size="sm" onClick={() => navigate('/products')}>
+      <Button variant="ghost" size="sm" onClick={() => navigate('/app/products')}>
         <ArrowLeft className="h-4 w-4 mr-1" /> 返回商品列表
       </Button>
 
@@ -137,7 +148,7 @@ export default function ProductDetailPage() {
                     key={p.id}
                     variant="outline"
                     className="justify-start h-auto py-3 px-4"
-                    onClick={() => navigate(`/content?product=${id}&platform=${p.id}`)}
+                    onClick={() => navigate(`/app/content?product=${id}&platform=${p.id}`)}
                   >
                     <Globe className="h-4 w-4 mr-2 shrink-0" />
                     <div className="text-left">
@@ -189,6 +200,30 @@ export default function ProductDetailPage() {
                   <p className="text-sm">暂无生成记录</p>
                   <p className="text-xs mt-1">点击上方按钮生成第一个 Listing</p>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 删除商品 */}
+          <Card className="border-destructive/20">
+            <CardContent className="pt-4">
+              {showDeleteConfirm ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <p>确定要删除这个商品吗？此操作不可撤销。</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="destructive" size="sm" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+                      {deleteMutation.isPending ? '删除中...' : '确认删除'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)}>取消</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" className="text-destructive gap-1 w-full" onClick={() => setShowDeleteConfirm(true)}>
+                  <Trash2 className="h-4 w-4" />删除商品
+                </Button>
               )}
             </CardContent>
           </Card>

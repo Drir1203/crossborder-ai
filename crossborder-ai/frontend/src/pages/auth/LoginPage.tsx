@@ -3,17 +3,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useTranslation } from 'react-i18next'
 import { Globe, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthStore } from '@/stores/authStore'
 
 const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email('邮箱格式不正确'),
+  password: z.string().min(1, '请输入密码'),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
@@ -21,14 +19,9 @@ type LoginForm = z.infer<typeof loginSchema>
 export default function LoginPage() {
   const navigate = useNavigate()
   const { login, isLoading, error, clearError } = useAuthStore()
-  const { t } = useTranslation()
   const [showPassword, setShowPassword] = useState(false)
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginForm>({
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   })
@@ -37,88 +30,66 @@ export default function LoginPage() {
     clearError()
     try {
       await login(data.email, data.password)
-      navigate('/dashboard')
-    } catch {
-      // Error is handled by the store
-    }
+      navigate('/app/dashboard')
+    } catch { /* handled by store */ }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="mb-4 flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Globe className="h-6 w-6 text-primary-foreground" />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm space-y-6">
+        {/* Logo */}
+        <div className="text-center">
+          <Link to="/" className="inline-flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <Globe className="h-4 w-4 text-white" />
             </div>
-          </div>
-          <CardTitle className="text-2xl font-bold">
-            {t('auth.welcomeBack')}
-          </CardTitle>
-          <CardDescription>
-            {t('auth.signIn')}
-          </CardDescription>
-        </CardHeader>
+            <span className="font-bold text-lg text-slate-800">VeyaShip</span>
+          </Link>
+        </div>
 
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <CardContent className="space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-800">登录</h1>
+            <p className="text-sm text-slate-500 mt-0.5">登录你的账号继续使用</p>
+          </div>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
+              <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-600">{error}</div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="email">{t('auth.email')}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@company.com"
-                {...register('email')}
-              />
-              {errors.email && (
-                <p className="text-xs text-destructive">{t('auth.invalidEmail')}</p>
-              )}
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-sm text-slate-700">邮箱</Label>
+              <Input id="email" type="email" placeholder="you@company.com" {...register('email')}
+                className="h-10 rounded-lg border-slate-200" />
+              {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">{t('auth.password')}</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm text-slate-700">密码</Label>
               <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  {...register('password')}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
+                <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="输入密码" {...register('password')}
+                  className="h-10 rounded-lg border-slate-200 pr-10" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
+                </button>
               </div>
-              {errors.password && (
-                <p className="text-xs text-destructive">{t('auth.passwordRequired')}</p>
-              )}
+              {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
             </div>
-          </CardContent>
 
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? t('common.loading') : t('auth.signInBtn')}
+            <Button type="submit" disabled={isLoading} className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+              {isLoading ? '登录中...' : '登录'}
             </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              {t('auth.noAccount')}{' '}
-              <Link to="/register" className="font-medium text-primary hover:underline">
-                {t('auth.signUp')}
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
+          </form>
+
+          <p className="text-center text-sm text-slate-500">
+            还没有账号？<Link to="/register" className="text-indigo-600 hover:text-indigo-700 font-medium">注册</Link>
+          </p>
+        </div>
+
+        <p className="text-center"><Link to="/" className="text-xs text-slate-400 hover:text-slate-600">← 返回首页</Link></p>
+      </div>
     </div>
   )
 }

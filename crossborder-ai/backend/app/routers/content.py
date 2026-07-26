@@ -285,6 +285,65 @@ async def generate_listing(
     )
 
 
+@router.post("/a-plus")
+async def generate_a_plus(
+    payload: GenerateRequest,
+    request: Request,
+    _ratelimit=Depends(RateLimit("ai_generate")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """生成 A+ 内容（带格式的图文商品详情）
+
+    对标 Amazon A+ Content / Shopify 增强描述。
+    生成 HTML 格式的丰富商品描述，含卖点图、对比表、品牌故事等。
+    """
+    from uuid import UUID
+    if current_user.credits < 1:
+        raise HTTPException(status_code=402, detail="积分不足")
+
+    try:
+        product_id = UUID(payload.product_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的商品 ID")
+
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="商品不存在")
+
+    if not product.title:
+        raise HTTPException(status_code=400, detail="商品缺少标题")
+
+    llm = DeepSeekService()
+    html = await llm.generate(
+        system_prompt=f"You are an expert A+ Content designer for {payload.platform}. Output only valid HTML.",
+        user_prompt=(
+            f"Create an A+ Content product description for {payload.platform} in {payload.language.upper()}.\n"
+            f"Product: {product.title}\n"
+            f"Price: {product.price}\n\n"
+            f"Structure:\n"
+            f"1. Hero section with product name and tagline\n"
+            f"2. Key features grid (4 items, each with emoji icon)\n"
+            f"3. Specification comparison table\n"
+            f"4. Usage scenarios (3 scenarios)\n"
+            f"5. Call to action\n\n"
+            f"Use clean HTML: <h2>, <p>, <ul>, <li>, <table>, <tr>, <td>. "
+            f"Use emoji for visual appeal. No CSS, no style attributes."
+        ),
+        max_tokens=2000,
+    )
+
+    # 清洗：只保留 HTML body 内容
+    import re
+    body_match = re.search(r'<body[^>]*>(.*?)</body>', html, re.DOTALL)
+    if body_match:
+        html = body_match.group(1)
+
+    await current_user.deduct_credits(db, 1)
+
+    return {"html": html, "product_title": product.title, "platform": payload.platform}
+
 # ── 辅助函数（私有，不暴露为 API 路由） ─────────────────────
 # 这些函数以下划线开头，是 Python 约定：表示"内部使用，不要外部导入"
 # 它们拆分了生成流程，使主函数更清晰
