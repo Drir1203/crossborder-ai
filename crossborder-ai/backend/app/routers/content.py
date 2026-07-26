@@ -35,6 +35,7 @@ from app.models.persona import Persona
 from app.models.product import Product
 from app.models.user import User
 from app.services.ai.deepseek import DeepSeekService
+from app.services.ai.aliyun_image import AliyunImageService
 from app.services.ai.replicate import ReplicateService
 from pydantic import BaseModel, Field
 
@@ -229,31 +230,43 @@ async def generate_listing(
     # ════════════════════════════════════════════════════════════
     # 第 5 步：生成商品主图（可选）
     # ════════════════════════════════════════════════════════════
-    # 如果用户勾选了"同时生成主图"
-    # 用 FLUX 模型基于商品标题生成产品图
+    # 优先阿里云通义万相，失败降级 Replicate
     image_url = ""
     if payload.generate_image:
         from app.core.config import settings
-        if not settings.REPLICATE_API_KEY:
+        if not settings.ALIYUN_DASHSCOPE_API_KEY and not settings.REPLICATE_API_KEY:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="图片生成功能暂未配置",
             )
-        try:
-            img_service = ReplicateService()
-            # 拼接图片 prompt：用户自定义 or 基于商品标题自动生成
-            prompt = payload.image_prompt or (
-                f"Professional e-commerce product photo of {product.title}, "
-                f"white background, studio lighting, 8K, photorealistic"
-            )
-            images = await img_service.generate_image(prompt, num_outputs=1)
-            if images:
-                image_url = images[0]
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"图片生成失败：{str(e)}",
-            )
+
+        prompt = payload.image_prompt or (
+            f"Professional e-commerce product photo of {product.title}, "
+            f"white background, studio lighting, 8K, photorealistic"
+        )
+
+        # 阿里云
+        if settings.ALIYUN_DASHSCOPE_API_KEY:
+            try:
+                img_service = AliyunImageService()
+                images = await img_service.generate_image(prompt, num_outputs=1)
+                if images:
+                    image_url = images[0]
+            except Exception:
+                pass  # 降级
+
+        # 阿里云失败或未配置 → Replicate
+        if not image_url and settings.REPLICATE_API_KEY:
+            try:
+                img_service = ReplicateService()
+                images = await img_service.generate_image(prompt, num_outputs=1)
+                if images:
+                    image_url = images[0]
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"图片生成失败：{str(e)}",
+                )
 
     # ════════════════════════════════════════════════════════════
     # 第 6 步：扣减积分

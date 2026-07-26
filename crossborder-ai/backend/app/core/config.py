@@ -117,6 +117,10 @@ class Settings(BaseSettings):
     REPLICATE_API_KEY: Optional[str] = None
     REPLICATE_MODEL: str = "black-forest-labs/flux-schnell"
 
+    # --- Aliyun DashScope (通义万相) ---
+    ALIYUN_DASHSCOPE_API_KEY: Optional[str] = None
+    ALIYUN_IMAGE_MODEL: str = "wanx2.1-t2i-turbo"
+
     # --- Shopify ---
     SHOPIFY_API_KEY: Optional[str] = None
     SHOPIFY_API_SECRET: Optional[str] = None
