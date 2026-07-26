@@ -79,6 +79,29 @@ async def get_dashboard(
         "recent": recent_products,
         "credits": {
             "remaining": current_user.credits,
-            "used": 100 - current_user.credits,  # 按默认 100 算
+            "used": 100 - current_user.credits,
         },
     }
+
+
+@router.get("/insights")
+async def get_ai_insights(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """AI 分析经营数据，给出经营建议"""
+    from app.services.ai.deepseek import DeepSeekService
+
+    total = (await db.execute(select(func.count(Product.id)).where(Product.user_id == current_user.id))).scalar() or 0
+    no_title = (await db.execute(select(func.count(Product.id)).where(Product.user_id == current_user.id, Product.title.is_(None)))).scalar() or 0
+
+    data = f"商品总数：{total}个\n待补充信息：{no_title}个\n剩余积分：{current_user.credits}\n套餐：{current_user.plan}"
+
+    try:
+        llm = DeepSeekService()
+        advice = await llm.generate("你是跨境电商运营顾问。根据数据给出3条简短建议，每条一行用数字开头。", data, max_tokens=500)
+        lines = [l.strip() for l in advice.strip().split("\n") if l.strip() and l[0].isdigit()]
+    except Exception:
+        lines = ["1. 完善商品信息，补充标题和描述", "2. 利用 AI 批量生成 Listing", "3. 定期检查商品销售数据"]
+
+    return {"stats": {"total": total, "pending": no_title, "credits": current_user.credits}, "advice": lines[:3]}

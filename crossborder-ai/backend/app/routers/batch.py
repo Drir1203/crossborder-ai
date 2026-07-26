@@ -211,3 +211,77 @@ async def cron_process_batch(
 
     await db.flush()
     return {"processed": len(results), "results": results}
+
+
+@router.post("/process-ai")
+async def batch_process_with_ai(
+    platform: str = "amazon",
+    language: str = "en",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量 AI 处理：对 pending 状态的批量任务执行 AI 生成
+
+    流程：
+    1. 取所有 pending 任务
+    2. 逐条创建商品
+    3. AI 生成 Listing（标题/描述/卖点）
+    4. 标记完成
+    """
+    if current_user.credits < len([1]):
+        raise HTTPException(status_code=402, detail="积分不足")
+
+    result = await db.execute(
+        select(BatchJob).where(BatchJob.user_id == current_user.id, BatchJob.status == "pending").limit(20)
+    )
+    jobs = result.scalars().all()
+    if not jobs:
+        return {"message": "没有待处理的任务", "processed": 0}
+
+    from app.services.ai.deepseek import DeepSeekService
+    llm = DeepSeekService()
+    results = []
+
+    for job in jobs:
+        try:
+            # 创建商品
+            product = Product(
+                user_id=current_user.id,
+                title=job.title or "",
+                url=job.url or f"batch://{job.id}",
+                price=float(job.price) if job.price else None,
+                description=job.description or "",
+            )
+            db.add(product)
+            await db.flush()
+
+            # AI 生成 Listing
+            title = await llm.generate(
+                f"You are a professional {platform} listing copywriter.",
+                f"Generate an optimized {platform} product title (max 200 chars) in {language}.\nProduct: {product.title}\nPrice: {product.price}",
+                max_tokens=300,
+            )
+            desc = await llm.generate_product_description(
+                product_title=product.title or "",
+                platform=platform,
+            )
+            bullets = await llm.generate_bullet_points(
+                product_title=product.title or "",
+                features=f"Price: {product.price}" if product.price else "",
+                platform=platform,
+            )
+
+            job.status = "processed"
+            job.processed_at = datetime.now(timezone.utc)
+            results.append({
+                "job_id": str(job.id), "product_id": str(product.id),
+                "title": title[:50], "bullet_count": len(bullets),
+                "status": "success",
+            })
+        except Exception as e:
+            job.status = "failed"
+            job.error = str(e)
+            results.append({"job_id": str(job.id), "status": "failed", "error": str(e)})
+
+    await db.flush()
+    return {"message": f"已处理 {len(results)} 条", "processed": len(results), "results": results}

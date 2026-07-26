@@ -12,5 +12,6 @@ from app.models.system_config import SystemConfig
 from app.models.persona import Persona
 from app.models.shopify_channel import ShopifyChannel
 from app.models.batch_job import BatchJob
+from app.models.conversation import Conversation, ConversationMessage
 
-__all__ = ["User", "Product", "SystemConfig", "Persona", "ShopifyChannel", "BatchJob"]
+__all__ = ["User", "Product", "SystemConfig", "Persona", "ShopifyChannel", "BatchJob", "Conversation", "ConversationMessage"]
