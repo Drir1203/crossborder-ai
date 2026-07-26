@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   CalendarDays,
   MessageSquareText,
+  Sparkles,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
