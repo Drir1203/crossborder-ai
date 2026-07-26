@@ -40,7 +40,7 @@ export default function LandingPage() {
             <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
               <Globe className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className="font-bold text-sm">VeyaShip</span>
+            <span className="font-bold text-sm">VeyaShip AI</span>
           </div>
           <div className="flex items-center gap-2">
             {isLoggedIn ? (
@@ -258,7 +258,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-400 space-y-1">
-        <p>© 2026 VeyaShip. All rights reserved.</p>
+        <p>© 2026 VeyaShip AI. All rights reserved.</p>
         <p className="text-[11px] text-slate-300">浙ICP备XXXXXXXX号-1</p>
         {/* ICP 备案号下来后替换上面的占位符 */}
       </footer>

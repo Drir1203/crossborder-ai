@@ -173,6 +173,48 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* ── 工作流一键上架 ───────────────────────────────── */}
+      <Card className="border-indigo-500/20 bg-indigo-500/5">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-indigo-500" />
+                一键上架工作流
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">粘贴链接 → 自动抓取 → AI 生成 → 发布</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+              placeholder="粘贴 1688 链接..."
+              className="flex-1 h-9 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary/40"
+            />
+            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1 shrink-0" onClick={() => {
+              if (!input.trim()) return
+              setShowAgentResult(false)
+              setInput(input.trim())
+              agentMutation.mutate('帮我上架 ' + input.trim() + ' 到 Shopify')
+            }} disabled={agentMutation.isPending}>
+              {agentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Sparkles className="h-4 w-4" />一键上架</>}
+            </Button>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md border hover:bg-accent"
+              onClick={() => agentMutation.mutate('帮我计算利润 售价$19.99 成本¥30 运费¥15')}>
+              💰 算利润
+            </button>
+            <button className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md border hover:bg-accent"
+              onClick={() => setInput('')}>
+              📋 清空
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── 统计卡片 ──────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((s) => (

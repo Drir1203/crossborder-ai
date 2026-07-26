@@ -34,7 +34,7 @@ export default function BillingPage() {
   const plans = data || []
 
   const handleCopy = () => {
-    navigator.clipboard.writeText('VeyaShip 套餐升级')
+    navigator.clipboard.writeText('VeyaShip AI 套餐升级')
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

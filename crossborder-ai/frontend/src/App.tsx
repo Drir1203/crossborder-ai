@@ -14,6 +14,7 @@ import BatchPage from '@/pages/batch/BatchPage'
 import RadarPage from '@/pages/radar/RadarPage'
 import LedgerPage from '@/pages/ledger/LedgerPage'
 import AgentPage from '@/pages/agent/AgentPage'
+import ImagesPage from '@/pages/images/ImagesPage'
 import { useAuthStore } from '@/stores/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="products" element={<ProductsPage />} />
         <Route path="products/:id" element={<ProductDetailPage />} />
         <Route path="content" element={<ContentPage />} />
+        <Route path="images" element={<ImagesPage />} />
         <Route path="shopify" element={<ShopifyPage />} />
         <Route path="batch" element={<BatchPage />} />
         <Route path="radar" element={<RadarPage />} />

@@ -49,7 +49,7 @@ export function RootLayout() {
           <button onClick={() => setMobileSidebar(true)} className="p-2 -ml-2">
             <Menu className="h-5 w-5" />
           </button>
-          <span className="font-bold text-sm">VeyaShip</span>
+          <span className="font-bold text-sm">VeyaShip AI</span>
           <div className="w-9" /> {/* 占位保持对称 */}
         </div>
 

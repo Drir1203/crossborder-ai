@@ -54,7 +54,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           {!collapsed && (
             <span className="font-bold text-sm tracking-tight whitespace-nowrap">
-              VeyaShip
+              VeyaShip AI
             </span>
           )}
         </div>

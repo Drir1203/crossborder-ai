@@ -202,7 +202,19 @@ PostgreSQL（本地 5432 端口）
 | 环境变量 | `/opt/veyaship/crossborder-ai/.env` |
 | Python 虚拟环境 | `/opt/veyaship/crossborder-ai/backend/venv/` |
 
-## 六、功能完成状态
+## 六、AI 工作流功能
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 工作流模板 | ✅ | 3 个预设模板：1688→Shopify、1688→Amazon、抓取+生成 |
+| 一键上架 | ✅ | Dashboard 输入链接 → 一键执行完整上架流程 |
+| Agent 持久化 | ⏳ 待做 | 当前每次对话独立，无记忆 |
+| AI 批量管道 | ⏳ 待做 | CSV 批量 AI 处理 |
+| AI 数据分析 | ⏳ 待做 | AI 分析经营数据 |
+
+---
+
+## 七、功能完成状态
 
 ### ✅ 已上线功能
 

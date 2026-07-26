@@ -70,6 +70,84 @@ class AgentOrchestrator:
         # ── 汇总结果 ──────────────────────────────────────
         return self._build_summary()
 
+    # ════════════════════════════════════════════════════════════
+    # 工作流模板
+    # ════════════════════════════════════════════════════════════
+    WORKFLOWS = {
+        "1688_to_shopify": {
+            "name": "1688 → Shopify 上架",
+            "steps": [
+                {"action": "scrape_1688", "critical": True, "description": "抓取 1688 商品"},
+                {"action": "create_product", "critical": True, "description": "创建商品"},
+                {"action": "generate_listing", "critical": False, "description": "AI 生成 Listing"},
+                {"action": "compliance_check", "critical": False, "description": "合规审查"},
+                {"action": "push_to_shopify", "critical": False, "description": "发布到 Shopify"},
+            ],
+        },
+        "1688_to_amazon": {
+            "name": "1688 → Amazon 上架",
+            "steps": [
+                {"action": "scrape_1688", "critical": True},
+                {"action": "create_product", "critical": True},
+                {"action": "generate_listing", "critical": False, "params": {"platform": "amazon"}},
+                {"action": "compliance_check", "critical": False},
+            ],
+        },
+        "scrape_and_list": {
+            "name": "抓取 + 生成 Listing",
+            "steps": [
+                {"action": "scrape_1688", "critical": True},
+                {"action": "create_product", "critical": True},
+                {"action": "generate_listing", "critical": False},
+            ],
+        },
+    }
+
+    async def run_workflow(self, workflow_name: str, params: dict) -> dict:
+        """执行预设工作流
+
+        Args:
+            workflow_name: 工作流名称（WORKFLOWS 的 key）
+            params: 参数，如 {"url": "1688链接", "platform": "amazon", "language": "en"}
+        """
+        template = self.WORKFLOWS.get(workflow_name)
+        if not template:
+            return {"summary": f"未知工作流: {workflow_name}", "status": "failed", "steps": []}
+
+        self.steps = []
+        context = {}  # 步骤间传递数据
+
+        for step_def in template["steps"]:
+            action = step_def["action"]
+            step_params = {**params, **step_def.get("params", {})}
+
+            # 从上下文补充参数
+            if "product_id" not in step_params and context.get("product_id"):
+                step_params["product_id"] = context["product_id"]
+            if "url" not in step_params and context.get("url"):
+                step_params["url"] = context["url"]
+            if "title" not in step_params and context.get("title"):
+                step_params["title"] = context["title"]
+
+            # 执行
+            step_result = await self._execute_step(action, step_params)
+            step_result["description"] = step_def.get("description", action)
+            self.steps.append(step_result)
+
+            # 传递数据到上下文
+            data = step_result.get("data") or {}
+            if data.get("url"): context["url"] = data["url"]
+            if data.get("title"): context["title"] = data["title"]
+            if data.get("product_id"): context["product_id"] = data["product_id"]
+            if data.get("image_url"): context["image_url"] = data["image_url"]
+            if step_result.get("summary"): context["last_summary"] = step_result["summary"]
+
+            # 关键步骤失败则终止
+            if step_result["status"] == "failed" and step_def.get("critical", False):
+                break
+
+        return self._build_summary()
+
     async def _create_plan(self, instruction: str) -> dict:
         """用 LLM 解析用户指令，生成执行计划
 
@@ -140,6 +218,8 @@ class AgentOrchestrator:
                 return await self._do_generate_listing(params)
             elif action == "compliance_check":
                 return await self._do_compliance(params)
+            elif action == "push_to_shopify":
+                return await self._do_push_to_shopify(params)
             elif action == "calculate_profit":
                 return await self._do_calculate_profit(params)
             elif action == "answer":
@@ -279,6 +359,64 @@ class AgentOrchestrator:
             "data": {"passed": passed, "violations": violations},
             "summary": "合规审查通过" if passed else f"发现违禁词：{', '.join(violations)}",
         }
+
+    async def _do_push_to_shopify(self, params: dict) -> dict:
+        """发布到 Shopify"""
+        product_id = params.get("product_id")
+        if not product_id:
+            return {"action": "push_to_shopify", "status": "failed", "error": "缺少商品ID"}
+
+        # 获取用户已绑定的 Shopify 店铺
+        from app.models.shopify_channel import ShopifyChannel
+        result = await self.db.execute(
+            select(ShopifyChannel).where(
+                ShopifyChannel.user_id == self.user.id,
+                ShopifyChannel.is_active == True,
+            )
+        )
+        channels = result.scalars().all()
+        if not channels:
+            return {"action": "push_to_shopify", "status": "failed", "error": "未绑定 Shopify 店铺，请先在 Shopify 页面绑定"}
+
+        # 推送到第一个绑定的店铺
+        import httpx
+        from app.core.config import settings
+        from app.models.product import Product
+        from uuid import UUID
+
+        prod_result = await self.db.execute(select(Product).where(Product.id == UUID(product_id)))
+        product = prod_result.scalar_one_or_none()
+        if not product:
+            return {"action": "push_to_shopify", "status": "failed", "error": "商品不存在"}
+
+        channel = channels[0]
+        shop_url = f"https://{channel.shop_name}.myshopify.com/admin/api/2024-10"
+        headers = {
+            "X-Shopify-Access-Token": channel.access_token,
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{shop_url}/products.json", json={
+                "product": {
+                    "title": product.title or "Untitled",
+                    "body_html": product.description or "",
+                    "status": "draft",
+                    "variants": [{"price": str(product.price)}] if product.price else [],
+                }
+            }, headers=headers)
+
+            if resp.status_code not in (200, 201):
+                return {"action": "push_to_shopify", "status": "failed", "error": f"Shopify 发布失败：{resp.text[:150]}"}
+
+            shopify_product = resp.json().get("product", {})
+            shopify_url = f"https://{channel.shop_name}.myshopify.com/admin/products/{shopify_product.get('id')}"
+            return {
+                "action": "push_to_shopify",
+                "status": "success",
+                "data": {"shopify_product_id": shopify_product.get("id"), "shopify_url": shopify_url},
+                "summary": f"已发布到 {channel.shop_name}（草稿状态）",
+            }
 
     async def _do_calculate_profit(self, params: dict) -> dict:
         """净利计算"""

@@ -24,6 +24,18 @@ from pydantic import BaseModel, Field
 router = APIRouter(prefix="/agent", tags=["AI 智能助手"])
 
 
+@router.get("/workflows")
+async def list_workflows():
+    """获取可用工作流模板列表"""
+    return {
+        "workflows": [
+            {"id": "1688_to_shopify", "name": "1688 → Shopify 上架", "desc": "抓取商品 → AI 生成 Listing → 发布到 Shopify", "cost": 2},
+            {"id": "1688_to_amazon", "name": "1688 → Amazon 上架", "desc": "抓取商品 → AI 生成 Amazon Listing", "cost": 2},
+            {"id": "scrape_and_list", "name": "抓取 + 生成 Listing", "desc": "抓取 1688 商品 → AI 生成 Listing（不发布）", "cost": 1},
+        ]
+    }
+
+
 class AgentRequest(BaseModel):
     """用户发给 Agent 的指令"""
     instruction: str = Field(..., min_length=2, max_length=2000, description="自然语言指令，如：帮我抓取这个商品并生成Listing")
@@ -75,6 +87,47 @@ async def run_agent(
 
     # 扣积分（Agent 操作消耗 1 积分）
     await current_user.deduct_credits(db, 1)
+
+    return AgentResponse(
+        summary=result.get("summary", ""),
+        status=result.get("status", "failed"),
+        steps=result.get("steps", []),
+    )
+
+
+class WorkflowRequest(BaseModel):
+    """工作流请求"""
+    workflow: str = Field(..., description="工作流名称: 1688_to_shopify, 1688_to_amazon, scrape_and_list")
+    url: str = Field("", description="1688 商品链接")
+    platform: str = Field("amazon", description="目标平台")
+    language: str = Field("en", description="目标语言")
+
+
+@router.post("/workflow", response_model=AgentResponse)
+async def run_workflow(
+    payload: WorkflowRequest,
+    request: Request,
+    _ratelimit=Depends(RateLimit("ai_generate")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """执行预设工作流
+
+    一键完成多步操作，不需要 LLM 解析指令。
+    比 /agent/run 更快更稳定。
+    """
+    if current_user.credits < 2:
+        raise HTTPException(status_code=402, detail="积分不足，工作流执行消耗 2 积分")
+
+    orchestrator = AgentOrchestrator(current_user, db)
+    params = {"url": payload.url, "platform": payload.platform, "language": payload.language}
+
+    try:
+        result = await orchestrator.run_workflow(payload.workflow, params)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"工作流执行失败：{str(e)}")
+
+    await current_user.deduct_credits(db, 2)
 
     return AgentResponse(
         summary=result.get("summary", ""),
