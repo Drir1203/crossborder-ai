@@ -59,9 +59,9 @@ class AliyunImageService:
             if not task_id:
                 raise RuntimeError(f"提交响应异常：{resp.text[:200]}")
 
-            # 2. 轮询结果
-            for _ in range(30):
-                await asyncio.sleep(2)
+            # 2. 轮询结果（0.5s 间隔，最快响应）
+            for _ in range(120):
+                await asyncio.sleep(0.5)
                 status_resp = await client.get(
                     f"{TASK_URL}{task_id}", headers=self._headers()
                 )

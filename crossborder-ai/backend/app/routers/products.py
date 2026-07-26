@@ -244,3 +244,72 @@ async def get_product(
         raise HTTPException(status_code=404, detail="商品不存在")
 
     return ProductResponse.model_validate(product).model_dump()
+
+
+@router.delete("/{product_id}", status_code=status.HTTP_200_OK)
+async def delete_product(
+    product_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除商品"""
+    from uuid import UUID
+    try:
+        uid = UUID(product_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的商品 ID")
+
+    result = await db.execute(select(Product).where(Product.id == uid))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="商品不存在")
+
+    await db.delete(product)
+    await db.flush()
+    return {"message": "商品已删除"}
+
+
+class BatchDeleteRequest(BaseModel):
+    ids: list[str] = Field(..., description="要删除的商品 ID 列表")
+
+
+@router.post("/batch-delete", status_code=status.HTTP_200_OK)
+async def batch_delete_products(
+    payload: BatchDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量删除商品"""
+    from uuid import UUID
+
+    deleted = 0
+    for product_id in payload.ids:
+        try:
+            uid = UUID(product_id)
+            result = await db.execute(select(Product).where(Product.id == uid))
+            product = result.scalar_one_or_none()
+            if product:
+                await db.delete(product)
+                deleted += 1
+        except ValueError:
+            continue
+
+    await db.flush()
+    return {"message": f"已删除 {deleted} 个商品", "deleted": deleted}
+
+
+@router.delete("", status_code=status.HTTP_200_OK)
+async def delete_all_products(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除当前用户所有商品"""
+    result = await db.execute(
+        select(Product).where(Product.user_id == current_user.id)
+    )
+    products = result.scalars().all()
+    count = len(products)
+    for p in products:
+        await db.delete(p)
+    await db.flush()
+    return {"message": f"已删除全部 {count} 个商品", "deleted": count}

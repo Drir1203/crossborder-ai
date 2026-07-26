@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/stores/authStore'
 import {
   Sparkles, Globe, ShoppingBag, Bot, DollarSign, Shield, ArrowRight, CheckCircle2,
   Languages, Zap,
@@ -16,18 +17,19 @@ const item = {
 }
 
 const FEATURES = [
-  { icon: Zap, title: 'AI Listing 生成', desc: '粘贴 1688 链接，AI 自动抓取商品信息，生成适配 Amazon / Shopify / eBay 等平台的标题、描述和卖点。' },
+  { icon: Zap, title: 'AI Listing 生成', desc: '自有商品可批量 CSV 导入或手动录入，AI 一键生成多平台 Listing。1688 拿货则粘贴链接自动抓取，同样 AI 生成。' },
   { icon: Languages, title: '多语言翻译 + 对照', desc: '支持英日韩法德等 16 种语言，保持 SEO 关键词优化，原文译文对照显示，质量可查验。' },
   { icon: Shield, title: '合规审查', desc: '正则 + AI 双重审查，自动检测违禁词和平台违规风险，避免下架和罚款。' },
   { icon: DollarSign, title: '利润计算器', desc: '输入售价、成本、运费和平台费率，自动计算净利润和利润率，辅助定价决策。' },
   { icon: Bot, title: 'AI 智能助手', desc: '自然语言指令操作：「帮我抓这个商品」「算下利润」「生成 Amazon Listing」。' },
-  { icon: ShoppingBag, title: 'Shopify 一键发布', desc: 'AI 生成内容后，选择绑定的店铺直接发布，无需复制粘贴。更多平台对接中。' },
+  { icon: ShoppingBag, title: '批量 CSV 导入 / 一键发布', desc: '自有商品通过 CSV 批量导入，或单个手动录入。AI 生成后选店铺直接发布到 Shopify。' },
 ]
 
 const PLATFORMS = ['Amazon', 'Shopify', 'eBay', 'Etsy', 'Temu', 'TikTok Shop', 'Walmart', 'AliExpress']
 
 export default function LandingPage() {
   const navigate = useNavigate()
+  const isLoggedIn = useAuthStore((s) => s.isAuthenticated)
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50/50">
@@ -41,10 +43,14 @@ export default function LandingPage() {
             <span className="font-bold text-sm">VeyaShip</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="text-slate-500">登录</Button>
-            <Button size="sm" onClick={() => navigate('/register')} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-              免费注册
-            </Button>
+            {isLoggedIn ? (
+              <Button size="sm" onClick={() => navigate('/app/dashboard')} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">进入应用</Button>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="text-slate-500">登录</Button>
+                <Button size="sm" onClick={() => navigate('/register')} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">免费注册</Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -69,22 +75,23 @@ export default function LandingPage() {
 
               <motion.div variants={item} className="space-y-4">
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
-                  <span className="text-slate-800">从 1688 到店铺上架，</span>
+                  <span className="text-slate-800">让 AI 帮你生成</span>
                   <br />
                   <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">
-                    全流程 AI 自动化
+                    多平台商品 Listing
                   </span>
                 </h1>
                 <p className="text-sm sm:text-base text-slate-500 max-w-lg mx-auto leading-relaxed">
-                  粘贴 1688 链接 → AI 抓取商品信息 → 生成多平台 Listing → 翻译 → 合规审查 → 一键上架。
+                  自有货源？批量 CSV 导入，AI 一键生成多平台 Listing。<br />
+                  1688 拿货？粘贴链接自动抓取，AI 帮你上架。
                   <br />
-                  一个平台完成选品到出单的全流程。
+                  两种模式，一个平台搞定。
                 </p>
               </motion.div>
 
               <motion.div variants={item} className="flex items-center justify-center gap-3 pt-1">
-                <Button size="lg" onClick={() => navigate('/register')} className="h-11 px-6 text-sm gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-                  免费开始使用 <ArrowRight className="h-3.5 w-3.5" />
+                <Button size="lg" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="h-11 px-6 text-sm gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+                  {isLoggedIn ? '进入应用' : '免费开始使用'} <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </motion.div>
 
@@ -108,7 +115,7 @@ export default function LandingPage() {
         {/* ── 流程 ────────────────────────────────────────── */}
         <section className="max-w-4xl mx-auto px-4 py-16">
           <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">四步完成上架</h2>
-          <p className="text-sm text-slate-500 text-center mb-8">从选定商品到店铺上架，最快 2 分钟</p>
+          <p className="text-sm text-slate-500 text-center mb-8">1688 抓取 或 自有商品批量录入 → AI 生成 → 上架</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { icon: LinkIcon, step: '01', title: '粘贴链接', desc: '复制 1688 商品链接' },
@@ -129,8 +136,8 @@ export default function LandingPage() {
 
         {/* ── 功能 ────────────────────────────────────────── */}
         <section className="max-w-5xl mx-auto px-4 py-16">
-          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">覆盖跨境卖家核心工作流</h2>
-          <p className="text-sm text-slate-500 text-center mb-8">选品、上架、合规、利润分析，一个平台完成</p>
+          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">两种货源模式都支持</h2>
+          <p className="text-sm text-slate-500 text-center mb-8">自有货源批量录入 / 1688 选品抓取，一个平台完成上架</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
             {FEATURES.map((f, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.04 }}
@@ -145,14 +152,106 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ── 产品展示 ────────────────────────────────────── */}
+        <section className="max-w-5xl mx-auto px-4 py-16">
+          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">看看 AI 生成的效果</h2>
+          <p className="text-sm text-slate-500 text-center mb-8">1688 抓取 → AI 自动生成 Amazon Listing</p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-xs font-medium text-slate-400 mb-3 uppercase tracking-wide">1688 商品信息</div>
+              <div className="space-y-2 text-sm">
+                <div className="flex gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 text-xs">图片</div>
+                  <div>
+                    <p className="font-medium text-slate-800">无线蓝牙耳机 5.3 降噪 高音质</p>
+                    <p className="text-slate-500">价格：¥36.50 | 已售 12,000+</p>
+                    <p className="text-slate-500 text-xs mt-1">店铺：深圳市华强北科技有限公司</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+              className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-medium text-indigo-600 uppercase tracking-wide">AI 生成的 Amazon Listing</div>
+                <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">已翻译 英文</span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <p className="font-medium text-slate-800">Wireless Bluetooth 5.3 Headphones, Over-Ear Noise Cancelling, Hi-Fi Sound Quality, 40H Battery Life, Comfort Fit for Work Travel</p>
+                <ul className="text-slate-600 text-xs space-y-1 mt-2">
+                  <li>• Bluetooth 5.3 technology for stable, lag-free connection</li>
+                  <li>• Active noise cancellation blocks up to 35dB ambient noise</li>
+                  <li>• Hi-Fi stereo sound with deep bass and clear treble</li>
+                  <li>• 40-hour battery life for all-day use</li>
+                  <li>• Lightweight ergonomic design for comfortable wear</li>
+                </ul>
+              </div>
+            </motion.div>
+          </div>
+          <p className="text-xs text-slate-400 text-center mt-3">左侧为 1688 原始商品数据，右侧为 AI 自动生成的 Amazon Listing</p>
+        </section>
+
+        {/* ── 定价 ────────────────────────────────────────── */}
+        <section className="max-w-3xl mx-auto px-4 py-16">
+          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">简单透明的定价</h2>
+          <p className="text-sm text-slate-500 text-center mb-8">免费开始，按需升级</p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              className="rounded-xl border border-slate-200 bg-white p-6">
+              <h3 className="font-semibold text-slate-800">免费版</h3>
+              <p className="text-2xl font-bold text-slate-800 mt-2">¥0<span className="text-sm font-normal text-slate-400">/月</span></p>
+              <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />100 次 AI 生成额度</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />1688 商品抓取</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />利润计算器</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />合规审查</li>
+              </ul>
+              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '免费开始'}</Button>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+              className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-6 relative">
+              <div className="absolute -top-2.5 right-4 bg-indigo-600 text-white text-xs px-3 py-0.5 rounded-full">推荐</div>
+              <h3 className="font-semibold text-slate-800">专业版</h3>
+              <p className="text-2xl font-bold text-slate-800 mt-2">¥99<span className="text-sm font-normal text-slate-400">/月</span></p>
+              <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />无限 AI 生成</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />AI 智能助手（Agent）</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />Shopify 一键发布</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />AI 图片生成</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />优先客服支持</li>
+              </ul>
+              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '选择专业版'}</Button>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ── 信任感 ──────────────────────────────────────── */}
+        <section className="max-w-3xl mx-auto px-4 py-8 text-center">
+          <div className="grid grid-cols-3 gap-8 text-center">
+            <div>
+              <p className="text-2xl font-bold text-slate-800">500+</p>
+              <p className="text-xs text-slate-500 mt-1">内测用户</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-800">16</p>
+              <p className="text-xs text-slate-500 mt-1">支持语言</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-800">8</p>
+              <p className="text-xs text-slate-500 mt-1">支持平台</p>
+            </div>
+          </div>
+        </section>
+
         {/* ── CTA ──────────────────────────────────────────── */}
         <section className="max-w-lg mx-auto px-4 py-16 text-center">
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
             className="rounded-2xl bg-gradient-to-br from-indigo-50 via-white to-violet-50 border border-slate-200 p-8 space-y-4">
             <h2 className="text-lg font-semibold text-slate-800">开始免费使用</h2>
             <p className="text-sm text-slate-500">无需信用卡，无需配置 API Key</p>
-            <Button size="lg" onClick={() => navigate('/register')} className="h-11 px-6 text-sm gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-              创建免费账号 <ArrowRight className="h-3.5 w-3.5" />
+            <Button size="lg" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="h-11 px-6 text-sm gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+              {isLoggedIn ? '进入应用' : '创建免费账号'} <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </motion.div>
         </section>

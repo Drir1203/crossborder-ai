@@ -1,12 +1,15 @@
 """VeyaShip - AI 图片生成路由
 
-双模式图片生成：
-1. 阿里云通义万相（优先，国内速度快）
-2. Replicate FLUX（备选，海外服务）
-自动降级，用户无感知。
+生产级设计：异步任务模式。
+用户提交生成请求 → 立即返回 task_id → 前端轮询结果。
+不会阻塞请求 10+ 秒。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import asyncio
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -22,18 +25,64 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/images", tags=["AI 图片生成"])
 
+# ── 内存任务存储（生产环境建议换 Redis） ─────────────────
+_task_store: dict[str, dict] = {}
+
 
 class GenerateImageRequest(BaseModel):
     prompt: str = Field(..., min_length=5, description="图片描述词")
     num_outputs: int = Field(default=1, ge=1, le=4)
 
 
-class GenerateImageResponse(BaseModel):
+class TaskResponse(BaseModel):
+    task_id: str
+    status: str  # pending / processing / completed / failed
     image_urls: list[str] = []
     model_used: str = ""
+    error: Optional[str] = None
 
 
-@router.post("/generate", response_model=GenerateImageResponse)
+async def _run_generation(task_id: str, prompt: str, num_outputs: int):
+    """后台执行图片生成（不阻塞主请求）"""
+    _task_store[task_id]["status"] = "processing"
+
+    # 品牌调性由主请求拼接，prompt 已包含
+
+    # 优先阿里云
+    if settings.ALIYUN_DASHSCOPE_API_KEY:
+        try:
+            svc = AliyunImageService()
+            urls = await svc.generate_image(prompt=prompt, num_outputs=num_outputs)
+            if urls:
+                _task_store[task_id].update({
+                    "status": "completed",
+                    "image_urls": urls,
+                    "model_used": settings.ALIYUN_IMAGE_MODEL,
+                })
+                return
+        except Exception:
+            pass  # 降级
+
+    # 降级 Replicate
+    if settings.REPLICATE_API_KEY:
+        try:
+            svc = ReplicateService()
+            urls = await svc.generate_image(prompt=prompt, num_outputs=num_outputs)
+            if urls:
+                _task_store[task_id].update({
+                    "status": "completed",
+                    "image_urls": urls,
+                    "model_used": settings.REPLICATE_MODEL,
+                })
+                return
+        except Exception as e:
+            _task_store[task_id].update({"status": "failed", "error": str(e)})
+            return
+
+    _task_store[task_id].update({"status": "failed", "error": "无可用的图片生成服务"})
+
+
+@router.post("/generate", response_model=TaskResponse)
 async def generate_image(
     payload: GenerateImageRequest,
     request: Request,
@@ -41,16 +90,14 @@ async def generate_image(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """生成商品图片
+    """提交图片生成任务（异步，立即返回 task_id）
 
-    优先用阿里云通义万相（国内服务器速度快），
-    如果阿里云未配置，降级到 Replicate FLUX。
+    前端通过 GET /api/v1/images/status/{task_id} 轮询结果。
     """
-    # 检查是否至少配置了一个服务
     if not settings.ALIYUN_DASHSCOPE_API_KEY and not settings.REPLICATE_API_KEY:
-        raise HTTPException(status_code=400, detail="图片生成功能暂未配置，请联系管理员开通")
+        raise HTTPException(status_code=400, detail="图片生成功能暂未配置")
 
-    # 加载品牌调性
+    # 拼接品牌调性
     enhanced_prompt = payload.prompt
     persona_result = await db.execute(select(Persona).where(Persona.user_id == current_user.id))
     persona = persona_result.scalar_one_or_none()
@@ -62,28 +109,27 @@ async def generate_image(
         if persona.brand_name:
             enhanced_prompt += f", {persona.brand_name} brand identity"
 
-    # 优先：阿里云通义万相
-    if settings.ALIYUN_DASHSCOPE_API_KEY:
-        try:
-            svc = AliyunImageService()
-            urls = await svc.generate_image(
-                prompt=enhanced_prompt,
-                num_outputs=payload.num_outputs,
-            )
-            if urls:
-                return GenerateImageResponse(image_urls=urls, model_used=settings.ALIYUN_IMAGE_MODEL)
-        except Exception as e:
-            # 阿里云失败，降级到 Replicate
-            if not settings.REPLICATE_API_KEY:
-                raise HTTPException(status_code=502, detail=f"图片生成失败：{str(e)}")
+    # 创建异步任务
+    task_id = str(uuid.uuid4())
+    _task_store[task_id] = {"status": "pending", "image_urls": [], "model_used": "", "error": None}
 
-    # 备选：Replicate FLUX
-    try:
-        svc = ReplicateService()
-        urls = await svc.generate_image(
-            prompt=enhanced_prompt,
-            num_outputs=payload.num_outputs,
-        )
-        return GenerateImageResponse(image_urls=urls, model_used=settings.REPLICATE_MODEL)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"图片生成失败：{str(e)}")
+    # 后台执行（不 await，立即返回）
+    asyncio.create_task(_run_generation(task_id, enhanced_prompt, payload.num_outputs))
+
+    return TaskResponse(task_id=task_id, status="pending")
+
+
+@router.get("/status/{task_id}", response_model=TaskResponse)
+async def get_task_status(task_id: str):
+    """查询图片生成任务状态"""
+    task = _task_store.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    return TaskResponse(
+        task_id=task_id,
+        status=task["status"],
+        image_urls=task.get("image_urls", []),
+        model_used=task.get("model_used", ""),
+        error=task.get("error"),
+    )

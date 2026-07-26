@@ -24,6 +24,7 @@
 8. 返回结果 → GenerateResponse
 """
 
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +75,7 @@ class GenerateResponse(BaseModel):
     seo_title: str = ""
     seo_description: str = ""
     image_url: str = ""
+    image_task_id: str = ""  # 异步图片任务ID，前端可轮询
     model_used: str = ""
 
 
@@ -215,9 +217,12 @@ async def generate_listing(
         else:
             # ── 普通模式（分步调用） ────────────────────────
             llm = DeepSeekService()
-            title = await _generate_title(llm, product, payload, persona_str)
-            description = await _generate_description(llm, product, payload, persona_str)
-            bullets = await _generate_bullets(llm, product, payload, persona_str)
+            # 标题、描述、卖点互不依赖，并发执行
+            import asyncio
+            t1 = _generate_title(llm, product, payload, persona_str)
+            t2 = _generate_description(llm, product, payload, persona_str)
+            t3 = _generate_bullets(llm, product, payload, persona_str)
+            title, description, bullets = await asyncio.gather(t1, t2, t3)
             seo = await _optimize_seo(llm, title, description, payload)
     except Exception as e:
         # 捕获所有 AI 调用异常，返回统一的中文错误提示
@@ -228,10 +233,11 @@ async def generate_listing(
         )
 
     # ════════════════════════════════════════════════════════════
-    # 第 5 步：生成商品主图（可选）
+    # 第 5 步：生成商品主图（可选，后台异步执行）
     # ════════════════════════════════════════════════════════════
-    # 优先阿里云通义万相，失败降级 Replicate
+    # 图片生成较慢（10s+），后台异步执行，不阻塞内容返回。
     image_url = ""
+    image_task_id = ""
     if payload.generate_image:
         from app.core.config import settings
         if not settings.ALIYUN_DASHSCOPE_API_KEY and not settings.REPLICATE_API_KEY:
@@ -245,28 +251,15 @@ async def generate_listing(
             f"white background, studio lighting, 8K, photorealistic"
         )
 
-        # 阿里云
-        if settings.ALIYUN_DASHSCOPE_API_KEY:
-            try:
-                img_service = AliyunImageService()
-                images = await img_service.generate_image(prompt, num_outputs=1)
-                if images:
-                    image_url = images[0]
-            except Exception:
-                pass  # 降级
-
-        # 阿里云失败或未配置 → Replicate
-        if not image_url and settings.REPLICATE_API_KEY:
-            try:
-                img_service = ReplicateService()
-                images = await img_service.generate_image(prompt, num_outputs=1)
-                if images:
-                    image_url = images[0]
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"图片生成失败：{str(e)}",
-                )
+        try:
+            import asyncio, uuid
+            from app.routers.images import _run_generation, _task_store
+            tid = str(uuid.uuid4())
+            _task_store[tid] = {"status": "pending", "image_urls": [], "model_used": "", "error": None}
+            asyncio.create_task(_run_generation(tid, prompt, 1))
+            image_task_id = tid
+        except Exception:
+            pass
 
     # ════════════════════════════════════════════════════════════
     # 第 6 步：扣减积分
@@ -287,6 +280,7 @@ async def generate_listing(
         seo_title=seo.get("seo_title", ""),
         seo_description=seo.get("seo_description", ""),
         image_url=image_url,
+        image_task_id=image_task_id,
         model_used="deepseek-chat",
     )
 
@@ -309,20 +303,27 @@ async def _generate_title(
     - 品牌调性（如果配置了）
     - 目标平台和语气
     """
-    brand_context = f"\n品牌调性：{persona}" if persona else ""
+    brand_context = f"\nBrand tone: {persona}" if persona else ""
+    lang_instruction = f"Write the title in {payload.language.upper()}." if payload.language != "zh" else "用中文写标题。"
     prompt = (
-        f"为以下商品生成一个优化的 {payload.platform} 标题"
-        f"（不超过 200 字符，{payload.language} 语言，{payload.tone} 语气）："
+        f"Generate an optimized {payload.platform} product title (max 200 chars, {payload.tone} tone)."
+        f"{lang_instruction}"
         f"{brand_context}\n"
-        f"商品：{product.title}\n"
-        f"价格：{product.price}\n"
-        f"店铺：{product.shop_name or ''}"
+        f"Product: {product.title}\n"
+        f"Price: {product.price}\n"
+        f"Shop: {product.shop_name or ''}"
     )
-    return await llm.generate(
-        system_prompt=f"你是一个 {payload.platform} 平台的专业 Listing 优化师",
-        user_prompt=prompt,
-        max_tokens=300,
-    )
+    # 重试最多3次，应对 DeepSeek API 限流导致的空响应
+    for attempt in range(3):
+        result = await llm.generate(
+            system_prompt=f"You are a professional {payload.platform} listing copywriter.",
+            user_prompt=prompt,
+            max_tokens=300,
+        )
+        if result and result.strip():
+            return result
+        await asyncio.sleep(1)
+    return ""
 
 
 async def _generate_description(

@@ -21,23 +21,22 @@ import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
 
   const navItems = [
-    { icon: LayoutDashboard, label: t('nav.dashboard'), path: '/dashboard' },
-    { icon: Package, label: t('nav.products'), path: '/products' },
-    { icon: FileText, label: t('nav.listings'), path: '/listings' },
-    { icon: Sparkles, label: t('nav.content'), path: '/content' },
-    { icon: Bot, label: t('nav.agent'), path: '/agent' },
-    { icon: Upload, label: t('nav.batch'), path: '/batch' },
-    { icon: Radar, label: t('nav.radar'), path: '/radar' },
-    { icon: Calculator, label: t('nav.ledger'), path: '/ledger' },
-    { icon: Globe, label: t('nav.shopify'), path: '/shopify' },
-    { icon: BarChart3, label: t('nav.analytics'), path: '/analytics' },
-    { icon: CreditCard, label: t('nav.billing'), path: '/billing' },
-    { icon: Settings, label: t('nav.settings'), path: '/settings' },
+    { icon: LayoutDashboard, label: t('nav.dashboard'), path: '/app/dashboard' },
+    { icon: Package, label: t('nav.products'), path: '/app/products' },
+    { icon: Sparkles, label: t('nav.content'), path: '/app/content' },
+    { icon: Bot, label: t('nav.agent'), path: '/app/agent' },
+    { icon: Image, label: t('nav.images'), path: '/app/images' },
+    { icon: Upload, label: t('nav.batch'), path: '/app/batch' },
+    { icon: Radar, label: t('nav.radar'), path: '/app/radar' },
+    { icon: Calculator, label: t('nav.ledger'), path: '/app/ledger' },
+    { icon: Globe, label: t('nav.shopify'), path: '/app/shopify' },
+    { icon: CreditCard, label: t('nav.billing'), path: '/app/billing' },
+    { icon: Settings, label: t('nav.settings'), path: '/app/settings' },
   ]
 
   return (
@@ -67,6 +66,7 @@ export function Sidebar() {
           <NavLink
             key={item.path}
             to={item.path}
+            onClick={onClose}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
