@@ -1,25 +1,28 @@
-# VeyaShip 🌐
+# VeyaShip AI 🌐
 
 > **AI-Powered Cross-Border E-Commerce Platform**
 >
-> Generate, optimize, and publish multi-platform product listings with AI.
+> Paste 1688 links or import your own products — AI automatically generates listings, translates, checks compliance, and publishes to Shopify.
 
 ---
 
 ## 📋 Overview
 
-VeyaShip is a SaaS platform that helps cross-border e-commerce sellers create compelling, localized product listings using AI. It leverages **DeepSeek LLM** for content generation, **FLUX** for AI image generation, and **LangGraph** for multi-step agent workflows.
+VeyaShip AI is a SaaS platform that helps cross-border e-commerce sellers create, optimize, and publish product listings using AI. It supports **two sourcing modes**: 1688 product scraping and自有货源 (own inventory) CSV import.
 
 ### Core Features
 
-- 🤖 **AI Content Generation** — Product titles, descriptions, bullet points, and SEO metadata
-- 🖼️ **AI Image Generation** — Generate product images via Replicate FLUX
-- 🌍 **Multi-Platform** — Amazon, Shopify, eBay, Etsy, Walmart, Shopee, Lazada
-- 🔄 **Translation & Localization** — 10+ language support
-- 📊 **RAG Knowledge Base** — Qdrant vector database for brand-aware content
-- 🏪 **Shopify Integration** — Import products, sync listings bi-directionally
-- 📈 **Analytics Dashboard** — Track usage, credits, and platform performance
-- 💳 **Subscription Billing** — Creem.io payment integration
+- 🤖 **AI Listing Generation** — Generate titles, descriptions, bullet points, and SEO metadata for Amazon / Shopify / eBay
+- 🖼️ **AI Image Generation** — Generate product images via Aliyun 通义万相 (¥0.02/image)
+- 🌍 **Multi-Language Translation** — 16 languages with原文对照显示
+- ✅ **Compliance Check** — Regex + AI double-layer banned word detection
+- 💰 **Profit Calculator** — Calculate net profit and margin automatically
+- 🏪 **Shopify Publishing** — One-click publish from AI-generated content
+- 🗣️ **AI Agent** — Natural language instruction: "scrape this for me" / "calculate profit" / "publish to Shopify"
+- 📦 **Batch CSV Import** — Bulk import products with AI-generated listings
+- 📊 **A+ Content** — Generate rich HTML product descriptions
+- 🔄 **Multi-Store Switching** — Switch between Shopify stores from the header
+- 📈 **Workflow Templates** — One-click workflows: 1688→Shopify, 1688→Amazon, Scrape+List
 
 ---
 
@@ -28,16 +31,14 @@ VeyaShip is a SaaS platform that helps cross-border e-commerce sellers create co
 ### Backend
 | Technology | Purpose |
 |-----------|---------|
-| Python 3.11+ / FastAPI | REST API framework |
+| Python 3.12+ / FastAPI | REST API framework |
 | SQLAlchemy 2.0 async + asyncpg | Async PostgreSQL ORM |
 | Alembic | Database migrations |
 | JWT (python-jose + bcrypt) | Authentication |
-| DeepSeek API | LLM text generation |
-| Replicate API | FLUX image generation |
-| LangChain + LangGraph | RAG + Agent workflows |
-| Qdrant | Vector database |
-| httpx + BeautifulSoup + Playwright | Web scraping |
-| APScheduler | Task scheduling |
+| DeepSeek V4 | LLM text generation |
+| Aliyun 通义万相 / Replicate | AI image generation |
+| LangGraph | Agent workflows |
+| httpx + BeautifulSoup | Web scraping / 1688 data |
 | pytest | Testing |
 
 ### Frontend
@@ -50,74 +51,49 @@ VeyaShip is a SaaS platform that helps cross-border e-commerce sellers create co
 | Zustand | State management |
 | TanStack React Query | Server state |
 | Axios | HTTP client |
-| React Hook Form + Zod | Form validation |
 | Lucide React + Framer Motion | Icons & animations |
 
 ### Infrastructure
 - **PostgreSQL 15** — Primary database
-- **Qdrant** — Vector search
-- **Docker + docker-compose** — Containerization
-- **Nginx** — Reverse proxy
+- **Nginx** — Reverse proxy + HTTPS
+- **systemd** — Service management
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-
-- Python 3.11+
+- Python 3.12+
 - Node.js 20+
-- PostgreSQL 15
-- Docker & docker-compose (optional)
+- PostgreSQL 15 (or SQLite for dev)
 
-### 1. Clone & Environment Setup
-
+### 1. Clone & Setup
 ```bash
-git clone <repo-url> crossborder-ai
+git clone https://github.com/Drir1203/crossborder-ai.git
 cd crossborder-ai
-
-# Backend environment
-cp .env.example .env
-# Edit .env with your API keys and database settings
-
-# Frontend environment
-cp frontend/.env.example frontend/.env
+cp .env.example .env  # Edit with your API keys
 ```
 
-### 2. Backend Setup
-
+### 2. Backend
 ```bash
 cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Run database migrations
-alembic upgrade head
-
-# Start development server
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Frontend Setup
-
+### 3. Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 4. Docker (Full Stack)
-
-```bash
-docker-compose up -d
-```
-
-Access:
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
+### 4. Access
+- **Frontend**: http://localhost:5173
+- **API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
-- **Qdrant Dashboard**: http://localhost:6333
 
 ---
 
@@ -127,56 +103,26 @@ Access:
 crossborder-ai/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/endpoints/     # REST API routes
-│   │   │   ├── auth.py           # Login, register, refresh
-│   │   │   ├── users.py          # Profile management
-│   │   │   ├── products.py       # Product CRUD
-│   │   │   ├── listings.py       # Multi-platform listings
-│   │   │   ├── content.py        # AI content generation
-│   │   │   ├── images.py         # AI image generation
-│   │   │   ├── payments.py       # Subscription & billing
-│   │   │   └── analytics.py      # Dashboard analytics
-│   │   ├── core/
-│   │   │   ├── config.py         # Pydantic settings
-│   │   │   ├── database.py       # SQLAlchemy async engine
-│   │   │   ├── security.py       # JWT & password hashing
-│   │   │   └── deps.py           # FastAPI dependencies
-│   │   ├── models/               # SQLAlchemy models
-│   │   ├── schemas/              # Pydantic schemas
-│   │   ├── services/
-│   │   │   ├── ai/
-│   │   │   │   ├── deepseek.py   # DeepSeek LLM client
-│   │   │   │   ├── replicate.py  # FLUX image generation
-│   │   │   │   ├── rag.py        # Qdrant vector search
-│   │   │   │   └── agent.py      # LangGraph workflows
-│   │   │   ├── crawler/
-│   │   │   │   ├── scraper.py    # Web scraping
-│   │   │   │   └── shopify.py    # Shopify REST API
-│   │   │   ├── payment.py        # Creem.io integration
-│   │   │   └── scheduler.py      # APScheduler tasks
-│   │   └── main.py               # FastAPI application
-│   ├── tests/
-│   ├── alembic/                  # Database migrations
-│   └── Dockerfile
+│   │   ├── core/           # Config, database, security, rate limiting
+│   │   ├── models/         # SQLAlchemy models (11 tables)
+│   │   ├── routers/        # API routes (auth, products, content, images, agent, batch, radar, ledger, shopify, settings, analytics)
+│   │   └── services/
+│   │       ├── ai/         # DeepSeek, Aliyun Image, Replicate, Agent, RAG
+│   │       └── scraper.py # 1688 multi-tier scraper
+│   ├── tests/              # 17+ pytest tests
+│   └── migrations/         # Alembic migrations
 ├── frontend/
-│   ├── src/
-│   │   ├── api/                  # API client & services
-│   │   ├── components/
-│   │   │   ├── ui/               # Shadcn UI components
-│   │   │   └── layout/           # App layout (sidebar, header)
-│   │   ├── pages/
-│   │   │   ├── auth/             # Login & Register
-│   │   │   ├── dashboard/        # Dashboard
-│   │   │   └── ...               # Other pages
-│   │   ├── stores/               # Zustand state
-│   │   ├── types/                # TypeScript types
-│   │   └── utils/                # Utilities
-│   ├── Dockerfile
-│   └── nginx.conf
-├── nginx/
-│   └── nginx.conf
-├── docker-compose.yml
-└── .env.example
+│   └── src/
+│       ├── api/            # Axios API client
+│       ├── components/     # UI & layout components
+│       ├── pages/          # 12 pages (dashboard, products, content, images, agent, shopify, batch, radar, ledger, billing, settings, landing)
+│       ├── stores/         # Zustand state (auth, store)
+│       ├── i18n/           # 9-language i18n
+│       └── utils/          # Themes, utilities
+├── nginx/                  # Nginx config
+├── deploy.sh               # One-click deployment script
+├── docker-compose.prod.yml # Production Docker setup
+└── .env.production         # Production environment template
 ```
 
 ---
@@ -186,211 +132,106 @@ crossborder-ai/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | Register new user |
-| POST | `/api/v1/auth/login` | Login & get tokens |
-| POST | `/api/v1/auth/refresh` | Refresh access token |
+| POST | `/api/v1/auth/login` | Login & get JWT |
 | GET | `/api/v1/auth/me` | Current user info |
-| GET/PUT | `/api/v1/users/profile` | User profile |
-| GET/POST | `/api/v1/products` | Product CRUD |
-| GET/POST | `/api/v1/listings` | Listing CRUD |
-| POST | `/api/v1/content/generate` | AI content generation |
-| POST | `/api/v1/images/generate` | AI image generation |
+| POST | `/api/v1/products/manual` | Create product manually |
+| POST | `/api/v1/products/scrape` | Scrape 1688 product |
+| GET | `/api/v1/products` | List products |
+| DELETE | `/api/v1/products/{id}` | Delete product |
+| POST | `/api/v1/products/batch-delete` | Batch delete products |
+| POST | `/api/v1/content/generate` | AI generate listing |
+| POST | `/api/v1/content/a-plus` | Generate A+ HTML content |
+| POST | `/api/v1/images/generate` | Submit image generation (async) |
+| GET | `/api/v1/images/status/{task_id}` | Poll image generation result |
+| POST | `/api/v1/agent/run` | AI Agent (natural language) |
+| POST | `/api/v1/agent/workflow` | Execute workflow template |
+| GET | `/api/v1/agent/workflows` | List workflow templates |
+| GET/POST | `/api/v1/agent/conversations` | Conversation management |
 | GET | `/api/v1/analytics/dashboard` | Dashboard stats |
-| GET | `/api/v1/payments/plans` | Subscription plans |
-| POST | `/api/v1/payments/create-checkout` | Checkout session |
+| GET | `/api/v1/analytics/insights` | AI business insights |
+| POST | `/api/v1/ledger/calculate` | Profit calculation |
+| POST | `/api/v1/shopify/push` | Push product to Shopify |
+| GET | `/api/v1/shopify/orders` | List Shopify orders |
+| POST | `/api/v1/shopify/compliance` | Compliance check |
+| POST | `/api/v1/batch/upload` | Upload CSV batch |
+| POST | `/api/v1/batch/process-ai` | Batch AI process |
+| GET/PUT | `/api/v1/settings/persona` | Brand tone settings |
 
 ---
 
 ## 🤖 AI Features
 
-### Content Generation
-- Product titles & descriptions optimized per platform
+### Listing Generation
+- Product titles, descriptions & bullet points per platform (Amazon/Shopify/eBay/Etsy...)
 - SEO meta data generation
-- Multi-language translation & localization
-- A/B testing variations
+- Multi-language translation (16 languages) with side-by-side comparison
+- A+ Content (rich HTML descriptions)
 
 ### Image Generation
-- FLUX model via Replicate API
-- Product photography with customizable styles
-- Background removal & replacement (coming soon)
+- Aliyun 通义万相 (preferred, ¥0.02/image)
+- Replicate FLUX (fallback)
+- Asynchronous task mode (submit → poll → result)
 
-### RAG Knowledge Base
-- Brand voice & guideline preservation
-- Product catalog context
-- Market-specific terminology
+### AI Agent
+- Natural language instruction: "scrape this product" / "calculate profit" / "generate listing"
+- Conversation persistence with chat history
+- Workflow templates: 1688→Shopify, 1688→Amazon, Scrape+List
 
-### Agent Workflows (LangGraph)
-- **ListingAgent**: End-to-end listing creation pipeline
-  - Product analysis → Title generation → Description → Bullet points → SEO → Image → Review
-
----
-
-## 🔒 Security
-
-- JWT-based authentication with access/refresh token rotation
-- Passwords hashed with bcrypt
-- CORS configured for frontend origins
-- SQLAlchemy parameterized queries (no SQL injection)
-- Environment-based configuration (no hardcoded secrets)
-
----
-
-## 📄 License
-
-Private / Proprietary — All rights reserved.
-
----
-
-## 🛠️ Development Roadmap
-
-- [x] Project structure & configuration
-- [x] Database models & migrations
-- [x] Authentication system
-- [x] Product & Listing CRUD
-- [x] AI content generation (DeepSeek)
-- [x] AI image generation (FLUX)
-- [x] RAG with Qdrant
-- [x] LangGraph agent workflows
-- [x] Shopify integration
-- [x] Frontend foundation
-- [x] Docker setup
-- [ ] Frontend product pages
-- [ ] Frontend listing pages
-- [ ] Frontend AI content UI
-- [ ] Payment integration
-- [ ] Testing suite
-- [ ] Production deployment
-- [ ] Frontend batch processing UI
-- [ ] Frontend competitor analysis UI
-- [ ] Frontend profit calculator UI
+### Business Tools
+- Profit calculator (cost + fees + shipping → net profit)
+- Compliance check (banned words detection)
+- 1688 product scraper (API + direct fallback)
+- Batch CSV import with AI processing
 
 ---
 
 ## 🚀 Production Deployment
 
-### Prerequisites
-
-| 需求 | 推荐方案 | 费用 |
-|------|---------|------|
-| **服务器** | Ubuntu 22.04+, 2核4G, 50GB SSD | ~$12-24/月 (DigitalOcean) 或 ¥68/月 (阿里云) |
-| **域名** | 任意域名 | ~¥50-80/年 |
-| **DeepSeek API Key** | [platform.deepseek.com](https://platform.deepseek.com) | 按量计费，新用户送额度 |
-| **Replicate API Key** | [replicate.com](https://replicate.com/account/api-tokens) | 按量计费 |
-
-### 推荐服务器配置
-
-| 规模 | CPU | 内存 | 存储 | 月流量 | 参考价格 |
-|------|-----|------|------|--------|---------|
-| 入门（个人卖家） | 2核 | 4G | 50GB | 2TB | ~$12/月 |
-| 标准（小团队） | 4核 | 8G | 100GB | 4TB | ~$24/月 |
-| 高负载（企业） | 8核 | 16G | 200GB | 8TB | ~$48/月 |
-
-### 部署步骤
-
-#### 1️⃣ 服务器初始化
-
-```bash
-# SSH 登录服务器
-ssh root@你的服务器IP
-
-# 更新系统
-apt update && apt upgrade -y
-
-# 安装 Git
-apt install -y git
-
-# 安装 Docker（一步脚本）
-curl -fsSL https://get.docker.com | bash
-```
-
-#### 2️⃣ 获取代码
-
-```bash
-git clone https://github.com/你的仓库/crossborder-ai.git /opt/veyaship
-cd /opt/veyaship
-```
-
-#### 3️⃣ 一键部署
-
+### One-Click Deploy
 ```bash
 chmod +x deploy.sh
 sudo ./deploy.sh
 ```
 
-脚本会自动完成：
-1. ✅ 安装 Docker + Docker Compose
-2. ✅ 生成随机密钥（SECRET_KEY, JWT_SECRET_KEY）
-3. ✅ 申请 Let's Encrypt SSL 证书（需域名已指向服务器）
-4. ✅ 构建 Docker 镜像并启动所有服务
-5. ✅ 健康检查确认服务正常
-
-#### 4️⃣ 手动配置（如果一键脚本走到一半停了）
-
+### Manual Deploy
 ```bash
-# 编辑环境变量
-nano /opt/veyaship/.env
-# 填入：APP_URL, BACKEND_CORS_ORIGINS, DEEPSEEK_API_KEY, REPLICATE_API_KEY, POSTGRES_PASSWORD
-
-# 修改 Nginx 域名
-sed -i 's/example.com/你的域名.com/g' /opt/veyaship/nginx/nginx.conf
-
-# 启动服务
-cd /opt/veyaship
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-### 服务管理
+### Configuration
+Copy `.env.production` to `.env` and configure:
+- `DEEPSEEK_API_KEY` — Required for AI generation
+- `ALIYUN_DASHSCOPE_API_KEY` — For AI image generation (optional)
+- `SHOPIFY_API_KEY` — For Shopify integration (optional)
+- `POSTGRES_PASSWORD` — Database password
+- `APP_URL` — Your domain
 
-```bash
-# 查看日志
-docker compose -f docker-compose.prod.yml logs -f
+See `DEPLOYMENT_CHECKLIST.md` for detailed deployment steps.
 
-# 查看特定服务日志
-docker compose -f docker-compose.prod.yml logs -f backend
+---
 
-# 重启服务
-docker compose -f docker-compose.prod.yml restart backend
+## 📄 License
+Private / Proprietary — All rights reserved.
 
-# 更新到最新版本
-cd /opt/veyaship
-git pull
-docker compose -f docker-compose.prod.yml up -d --build
+---
 
-# 停止所有服务
-docker compose -f docker-compose.prod.yml down
+## 📊 Feature Status
 
-# 停止并删除数据（⚠️ 会丢数据！）
-docker compose -f docker-compose.prod.yml down -v
-```
-
-### 数据库备份
-
-```bash
-# 手动备份
-docker exec crossborder-postgres pg_dump -U crossborder crossborder_ai > backup_$(date +%Y%m%d).sql
-
-# 定时备份（每天凌晨 3 点）
-(crontab -l 2>/dev/null; echo "0 3 * * * docker exec crossborder-postgres pg_dump -U crossborder crossborder_ai > /opt/veyaship/backups/veyaship_\$(date +\\%Y\\%m\\%d).sql && find /opt/veyaship/backups -name '*.sql' -mtime +30 -delete") | crontab -
-```
-
-### 监控
-
-```bash
-# 健康检查
-curl https://你的域名.com/health
-
-# 查看容器资源占用
-docker stats
-
-# 查看 PostgreSQL 日志
-docker compose -f docker-compose.prod.yml logs postgres
-```
-
-### 故障排查
-
-| 问题 | 可能原因 | 解决 |
-|------|---------|------|
-| 502 Bad Gateway | 后端未启动 | `docker compose logs backend` |
-| 413 Request Entity Too Large | 上传文件太大 | 检查 nginx.conf 的 `client_max_body_size` |
-| 429 Too Many Requests | 触发了限流 | 等 1 分钟自动恢复 |
-| SSL 证书过期 | Certbot 续期失败 | `certbot renew` 手动续期 |
-| 数据库连不上 | PostgreSQL 未就绪 | `docker compose logs postgres` 确认健康检查通过 |
+| Module | Status | Description |
+|--------|--------|-------------|
+| F1 Dashboard | ✅ | Business overview + quick actions |
+| F1 AI Agent | ✅ | Natural language + workflow templates |
+| F2 1688 Scraper | ✅ | Multi-tier scraping (API + direct) |
+| F2 Listing Gen | ✅ | AI titles, descriptions, bullets, SEO |
+| F3 Image Gen | ✅ | Aliyun 通义万相 / Replicate (async) |
+| F4 Batch CSV | ✅ | Import + AI processing |
+| F5 Brand Tone | ✅ | Per-user persona configuration |
+| F6 Radar | ✅ | Multi-competitor comparison |
+| F7 Shopify | ✅ | Orders, refunds, publishing |
+| F8 Compliance | ✅ | Regex + AI double check |
+| F9 Profit Calc | ✅ | Net profit & margin calculator |
+| A+ Content | ✅ | Rich HTML descriptions |
+| Multi-Language | ✅ | 16 languages with原文对照 |
+| Multi-Store | ✅ | Shopify store switcher |
+| Translations | ⚠️ | Partial (core pages done) |
+| ICP Filing | ⏳ | Required for China servers |
