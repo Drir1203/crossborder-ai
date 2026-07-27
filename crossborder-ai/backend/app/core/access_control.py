@@ -14,6 +14,7 @@ FEATURE_ACCESS: dict[str, list[str]] = {
     "shopify_publish": ["standard", "professional"],          # Standard 起可用
     "agent": ["standard", "professional"],                    # Standard 起可用
     "batch_ai": ["standard", "professional"],                 # Standard 起可用
+    "category_analysis": ["free", "standard", "professional"],# 所有套餐可用（选品决策核心功能）
 }
 
 # ── 白名单（测试账号邮箱，不受限制） ──────────────────────────

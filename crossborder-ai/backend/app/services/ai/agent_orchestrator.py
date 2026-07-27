@@ -158,6 +158,7 @@ class AgentOrchestrator:
 【核心规则】
 - 你必须选择具体的工具来执行，不能只是回答问题
 - 如果用户没有明确说要做什么，引导用户使用工具
+- 用户提到分析/市场/能不能做/品类 → 用 analyze_category
 - 用户提到商品链接 → 用 scrape_1688
 - 用户提到生成/发布/上架 → 用 generate_listing
 - 用户提到利润/成本/计算 → 用 calculate_profit
@@ -165,7 +166,11 @@ class AgentOrchestrator:
 - 不要使用 "answer" 工具，永远用具体工具
 
 可用工具：
-1. scrape_1688 — 抓取1688商品
+1. analyze_category — 品类市场分析
+   参数: {"keyword": "品类关键词，如蓝牙耳机"}
+   输出: 市场容量、竞争格局、利润模型、选品建议
+
+2. scrape_1688 — 抓取1688商品
    参数: {"url": "1688商品链接"}
    输出: 商品标题、价格、图片
 
@@ -222,6 +227,8 @@ class AgentOrchestrator:
                 return await self._do_push_to_shopify(params)
             elif action == "calculate_profit":
                 return await self._do_calculate_profit(params)
+            elif action == "analyze_category":
+                return await self._do_analyze_category(params)
             elif action == "answer":
                 msg = params.get("message", "")
                 return {"action": action, "status": "success", "result": msg, "summary": msg[:100]}
@@ -346,6 +353,23 @@ class AgentOrchestrator:
             "data": {"title": title, "description": description, "bullet_points": bullets},
             "summary": f"已为 {platform} 生成 Listing：{title[:50]}...",
         }
+
+    async def _do_analyze_category(self, params: dict) -> dict:
+        """品类分析"""
+        from app.services.ai.deepseek import DeepSeekService
+        keyword = params.get("keyword") or params.get("category") or params.get("query", "")
+        if not keyword:
+            return {"action": "analyze_category", "status": "failed", "error": "缺少品类关键词"}
+        try:
+            llm = DeepSeekService()
+            report = await llm.generate(
+                "你是一个跨境电商数据分析师。输出结构化市场分析报告，数据具体合理。",
+                f"分析品类「{keyword}」Amazon US市场：1.市场概览（搜索量、商品数、均价）2.价格分布 3.竞争格局 4.用户痛点Top3 5.1688到Amazon利润模型 6.选品建议和评分。数据用具体数字。",
+                max_tokens=4000,
+            )
+            return {"action": "analyze_category", "status": "success", "data": {"report": report}, "summary": f"{keyword} 市场分析完成"}
+        except Exception as e:
+            return {"action": "analyze_category", "status": "failed", "error": str(e)}
 
     async def _do_compliance(self, params: dict) -> dict:
         """合规审查"""
