@@ -6,6 +6,28 @@
 
 ---
 
+**中文介绍**
+
+**VeyaShip AI** 是一个面向跨境电商卖家的 AI SaaS 平台。无论你是从 1688 拿货还是自有货源，一个平台完成选品、上架、翻译、合规的全流程。
+
+**标语：从 1688 到店铺上架，全流程 AI 自动化。**
+
+核心能力：
+- **1688 商品抓取** — 粘贴链接，自动抓取商品信息
+- **AI 生成 Listing** — 自动生成适配 Amazon/Shopify/eBay 的标题、描述、卖点
+- **多语言翻译** — 支持 16 种语言，原文译文对照显示
+- **合规审查** — 自动检测违禁词，避免下架罚款
+- **利润计算** — 输入售价成本，自动算净利
+- **一键发布** — AI 生成后直接发布到 Shopify
+- **AI 智能助手** — 说一句话，自动执行多步操作
+- **批量处理** — CSV 导入，批量 AI 生成和发布
+
+> 适合两类卖家：
+> - **1688 拿货卖家**：粘贴链接 → AI 抓取 → 生成 Listing → 上架
+> - **自有货源卖家**：CSV 批量导入 → AI 生成 Listing → 上架
+
+---
+
 ## 📋 Overview
 
 VeyaShip AI is a SaaS platform that helps cross-border e-commerce sellers create, optimize, and publish product listings using AI. It supports **two sourcing modes**: 1688 product scraping and自有货源 (own inventory) CSV import.
