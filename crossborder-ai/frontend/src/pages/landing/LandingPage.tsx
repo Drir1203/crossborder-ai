@@ -17,12 +17,12 @@ const item = {
 }
 
 const FEATURES = [
-  { icon: Zap, title: 'AI Listing 生成', desc: '自有商品可批量 CSV 导入或手动录入，AI 一键生成多平台 Listing。1688 拿货则粘贴链接自动抓取，同样 AI 生成。' },
-  { icon: Languages, title: '多语言翻译 + 对照', desc: '支持英日韩法德等 16 种语言，保持 SEO 关键词优化，原文译文对照显示，质量可查验。' },
-  { icon: Shield, title: '合规审查', desc: '正则 + AI 双重审查，自动检测违禁词和平台违规风险，避免下架和罚款。' },
-  { icon: DollarSign, title: '利润计算器', desc: '输入售价、成本、运费和平台费率，自动计算净利润和利润率，辅助定价决策。' },
-  { icon: Bot, title: 'AI 智能助手', desc: '自然语言指令操作：「帮我抓这个商品」「算下利润」「生成 Amazon Listing」。' },
-  { icon: ShoppingBag, title: '批量 CSV 导入 / 一键发布', desc: '自有商品通过 CSV 批量导入，或单个手动录入。AI 生成后选店铺直接发布到 Shopify。' },
+  { icon: Bot, title: 'AI 选品决策', desc: '告诉 AI "我想做蓝牙耳机"，自动分析 Amazon 市场容量、竞争格局、利润空间，给出能不能做的判断。' },
+  { icon: DollarSign, title: '利润自动计算', desc: 'AI 自动从 1688 获取供货价，结合平台费率运费广告成本，算出真实净利润和利润率。' },
+  { icon: Zap, title: 'AI 生成 Listing', desc: '确定要卖的商品后，AI 自动生成适配 Amazon/Shopify/eBay 的标题、描述、卖点和 SEO。' },
+  { icon: Languages, title: '多语言翻译 + 对照', desc: '支持英日韩法德等 16 种语言，原文译文对照显示，质量可查验，适合多站点运营。' },
+  { icon: Shield, title: '合规审查', desc: '正则 + AI 双重检测违禁词和平台违规风险，避免下架罚款，降低运营风险。' },
+  { icon: ShoppingBag, title: 'Shopify 一键发布', desc: 'AI 生成内容后直接发布到绑定的 Shopify 店铺。自有商品支持 CSV 批量导入批量处理。' },
 ]
 
 const PLATFORMS = ['Amazon', 'Shopify', 'eBay', 'Etsy', 'Temu', 'TikTok Shop', 'Walmart', 'AliExpress']
@@ -75,17 +75,16 @@ export default function LandingPage() {
 
               <motion.div variants={item} className="space-y-4">
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
-                  <span className="text-slate-800">让 AI 帮你生成</span>
+                  <span className="text-slate-800">这个品能不能做？</span>
                   <br />
                   <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">
-                    多平台商品 Listing
+                    AI 帮你做跨境决策
                   </span>
                 </h1>
                 <p className="text-sm sm:text-base text-slate-500 max-w-lg mx-auto leading-relaxed">
-                  自有货源？批量 CSV 导入，AI 一键生成多平台 Listing。<br />
-                  1688 拿货？粘贴链接自动抓取，AI 帮你上架。
+                  输入品类名，AI 自动分析 Amazon 市场容量、竞争格局、利润空间。
                   <br />
-                  两种模式，一个平台搞定。
+                  从选品决策到 Listing 生成再到上架，一个平台完成。
                 </p>
               </motion.div>
 
@@ -114,14 +113,14 @@ export default function LandingPage() {
 
         {/* ── 流程 ────────────────────────────────────────── */}
         <section className="max-w-4xl mx-auto px-4 py-16">
-          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">四步完成上架</h2>
-          <p className="text-sm text-slate-500 text-center mb-8">1688 抓取 或 自有商品批量录入 → AI 生成 → 上架</p>
+          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">从选品到上架，四步完成</h2>
+          <p className="text-sm text-slate-500 text-center mb-8">AI 分析品类 → 决定能不能做 → 生成 Listing → 发布到店铺</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { icon: LinkIcon, step: '01', title: '粘贴链接', desc: '复制 1688 商品链接' },
-              { icon: Sparkles, step: '02', title: 'AI 生成', desc: '自动抓取 + 写标题描述' },
-              { icon: Globe, step: '03', title: '选择平台', desc: '目标平台和语言' },
-              { icon: ShoppingBag, step: '04', title: '一键上架', desc: '发布到你的店铺' },
+              { icon: Bot, step: '01', title: 'AI 选品分析', desc: '输入品类，AI 分析市场机会' },
+              { icon: DollarSign, step: '02', title: '利润测算', desc: '自动算净利和利润率' },
+              { icon: Sparkles, step: '03', title: 'AI 生成 Listing', desc: '自动写标题描述卖点' },
+              { icon: ShoppingBag, step: '04', title: '一键上架', desc: '发布到 Shopify 店铺' },
             ].map((s, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }}
                 className="text-center p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
@@ -136,8 +135,8 @@ export default function LandingPage() {
 
         {/* ── 功能 ────────────────────────────────────────── */}
         <section className="max-w-5xl mx-auto px-4 py-16">
-          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">两种货源模式都支持</h2>
-          <p className="text-sm text-slate-500 text-center mb-8">自有货源批量录入 / 1688 选品抓取，一个平台完成上架</p>
+          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">覆盖跨境卖家核心决策链路</h2>
+          <p className="text-sm text-slate-500 text-center mb-8">选品分析 → 利润测算 → Listing 生成 → 上架发布，一个平台完成</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
             {FEATURES.map((f, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.04 }}
@@ -155,7 +154,7 @@ export default function LandingPage() {
         {/* ── 产品展示 ────────────────────────────────────── */}
         <section className="max-w-5xl mx-auto px-4 py-16">
           <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">看看 AI 生成的效果</h2>
-          <p className="text-sm text-slate-500 text-center mb-8">1688 抓取 → AI 自动生成 Amazon Listing</p>
+          <p className="text-sm text-slate-500 text-center mb-8">AI 分析品类数据 → 给出选品建议 → 生成 Listing</p>
           <div className="grid md:grid-cols-2 gap-4">
             <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
               className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

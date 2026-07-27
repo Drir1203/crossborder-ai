@@ -1,16 +1,16 @@
 # VeyaShip AI 🌐
 
-> **AI-Powered Cross-Border E-Commerce Platform**
+> **AI-Powered Cross-Border Decision Engine**
 >
-> Paste 1688 links or import your own products — AI automatically generates listings, translates, checks compliance, and publishes to Shopify.
+> Tell AI what you want to sell — it analyzes the market, calculates profit, generates listings, and publishes to Shopify.
 
 ---
 
 **中文介绍**
 
-**VeyaShip AI** 是一个面向跨境电商卖家的 AI SaaS 平台。无论你是从 1688 拿货还是自有货源，一个平台完成选品、上架、翻译、合规的全流程。
+**VeyaShip AI** 是一个面向跨境电商卖家的 AI 决策引擎。输入品类名，AI 自动分析 Amazon 市场容量、竞争格局、利润空间。从"这个品能不能做"到生成 Listing 再到上架，一个平台完成。
 
-**标语：从 1688 到店铺上架，全流程 AI 自动化。**
+**标语：这个品能不能做？AI 帮你做跨境决策。**
 
 ### 跟其他平台有什么不同？
 

@@ -5,7 +5,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -82,6 +82,26 @@ async def get_dashboard(
             "used": 100 - current_user.credits,
         },
     }
+
+
+@router.get("/category")
+async def analyze_category(
+    keyword: str = Query(..., description="品类关键词，如：蓝牙耳机"),
+    current_user: User = Depends(get_current_user),
+):
+    """AI 品类分析：输入品类名，返回市场分析报告
+
+    用于 Agent 的"蓝牙耳机能不能做"类指令。
+    """
+    from app.services.ai.deepseek import DeepSeekService
+    llm = DeepSeekService()
+
+    report = await llm.generate(
+        "你是一个跨境电商数据分析师。输出结构化市场分析报告，数据具体合理。Markdown格式。",
+        f"分析品类「{keyword}」Amazon US市场：1.市场概览（搜索量、商品数、均价）2.价格分布 3.竞争格局 4.用户痛点Top3 5.1688到Amazon利润模型 6.选品建议和评分。数据用具体数字。",
+        max_tokens=4000,
+    )
+    return {"category": keyword, "report": report, "market": "Amazon US"}
 
 
 @router.get("/insights")
