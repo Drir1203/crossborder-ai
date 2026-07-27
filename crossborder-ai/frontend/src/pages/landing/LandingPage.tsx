@@ -195,32 +195,43 @@ export default function LandingPage() {
         <section className="max-w-3xl mx-auto px-4 py-16">
           <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">简单透明的定价</h2>
           <p className="text-sm text-slate-500 text-center mb-8">免费开始，按需升级</p>
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
               className="rounded-xl border border-slate-200 bg-white p-6">
               <h3 className="font-semibold text-slate-800">免费版</h3>
               <p className="text-2xl font-bold text-slate-800 mt-2">¥0<span className="text-sm font-normal text-slate-400">/月</span></p>
               <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />100 次 AI 生成额度</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />1688 商品抓取</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />AI 品类分析（不限次）</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />AI 生成 30 次/月</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />利润计算器</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />合规审查</li>
               </ul>
               <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '免费开始'}</Button>
             </motion.div>
-            <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+            <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.05 }}
               className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-6 relative">
               <div className="absolute -top-2.5 right-4 bg-indigo-600 text-white text-xs px-3 py-0.5 rounded-full">推荐</div>
-              <h3 className="font-semibold text-slate-800">专业版</h3>
+              <h3 className="font-semibold text-slate-800">Standard</h3>
               <p className="text-2xl font-bold text-slate-800 mt-2">¥99<span className="text-sm font-normal text-slate-400">/月</span></p>
               <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />无限 AI 生成</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />品类分析 + AI 生成不限次</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />AI 智能助手（Agent）</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />Shopify 一键发布</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />AI 图片生成</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />优先客服支持</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />批量 AI 处理</li>
               </ul>
-              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '选择专业版'}</Button>
+              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '选择 Standard'}</Button>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+              className="rounded-xl border border-slate-200 bg-white p-6">
+              <h3 className="font-semibold text-slate-800">Professional</h3>
+              <p className="text-2xl font-bold text-slate-800 mt-2">¥249<span className="text-sm font-normal text-slate-400">/月</span></p>
+              <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />所有 Standard 功能</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />AI 商品主图生成</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />不限量品类分析报告</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />优先技术支持</li>
+              </ul>
+              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '选择 Professional'}</Button>
             </motion.div>
           </div>
         </section>

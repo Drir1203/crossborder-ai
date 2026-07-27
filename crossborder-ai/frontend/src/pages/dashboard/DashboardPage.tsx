@@ -63,12 +63,31 @@ export default function DashboardPage() {
     },
   })
 
+  // ── 品类分析状态 ─────────────────────────────────────
+  const [categoryInput, setCategoryInput] = useState('')
+  const [report, setReport] = useState<string | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+
+  // 品类分析
+  const handleAnalyze = async () => {
+    if (!categoryInput.trim()) return
+    setAnalyzing(true)
+    setReport(null)
+    try {
+      const res = await apiClient.get('/analytics/category', { params: { keyword: categoryInput.trim() } })
+      setReport(res.data.report)
+    } catch (err: any) {
+      setReport(`分析失败：${err?.response?.data?.detail || '请稍后重试'}`)
+    }
+    setAnalyzing(false)
+  }
+
   // 快捷跳转
   const quickActions = [
+    { icon: TrendingUp, label: '品类分析', path: '', color: 'text-violet-500', bg: 'bg-violet-500/10', onClick: () => document.getElementById('category-input')?.focus() },
+    { icon: Bot, label: 'AI 助手', path: '/app/agent', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
     { icon: ShoppingCart, label: '录入商品', path: '/app/products', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { icon: MessageSquareText, label: 'AI 生成', path: '/app/content', color: 'text-amber-500', bg: 'bg-amber-500/10' },
-    { icon: Bot, label: 'AI 助手', path: '/app/agent', color: 'text-violet-500', bg: 'bg-violet-500/10' },
-    { icon: DollarSign, label: '算利润', path: '/app/ledger', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { icon: MessageSquareText, label: '生成 Listing', path: '/app/content', color: 'text-amber-500', bg: 'bg-amber-500/10' },
   ]
 
   // ── Agent 执行 ──────────────────────────────────────────
@@ -174,45 +193,44 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* ── 工作流一键上架 ───────────────────────────────── */}
-      <Card className="border-indigo-500/20 bg-indigo-500/5">
+      {/* ── AI 品类分析 ─────────────────────────────────── */}
+      <Card className="border-violet-500/20 bg-violet-500/5">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm font-medium flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-indigo-500" />
-                一键上架工作流
+                <TrendingUp className="h-4 w-4 text-violet-500" />
+                AI 品类分析
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">粘贴链接 → 自动抓取 → AI 生成 → 发布</p>
+              <p className="text-xs text-muted-foreground mt-0.5">输入品类名，AI 自动分析市场容量、竞争格局、利润空间</p>
             </div>
           </div>
           <div className="flex gap-2">
             <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder="粘贴 1688 链接..."
-              className="flex-1 h-9 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary/40"
+              id="category-input"
+              value={categoryInput}
+              onChange={(e) => setCategoryInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+              placeholder="输入品类名，如：蓝牙耳机、瑜伽裤、智能手表..."
+              className="flex-1 h-9 rounded-lg border bg-background px-3 text-sm outline-none focus:border-violet-400"
             />
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1 shrink-0" onClick={() => {
-              if (!input.trim()) return
-              setShowAgentResult(false)
-              setInput(input.trim())
-              agentMutation.mutate('帮我上架 ' + input.trim() + ' 到 Shopify')
-            }} disabled={agentMutation.isPending}>
-              {agentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Sparkles className="h-4 w-4" />一键上架</>}
+            <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1 shrink-0" onClick={handleAnalyze} disabled={analyzing}>
+              {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><TrendingUp className="h-4 w-4" />AI 分析</>}
             </Button>
           </div>
-          <div className="flex gap-2 mt-2">
-            <button className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md border hover:bg-accent"
-              onClick={() => agentMutation.mutate('帮我计算利润 售价$19.99 成本¥30 运费¥15')}>
-              💰 算利润
-            </button>
-            <button className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md border hover:bg-accent"
-              onClick={() => setInput('')}>
-              📋 清空
-            </button>
-          </div>
+
+          {/* 分析结果 */}
+          {analyzing && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />AI 正在分析市场数据...
+            </div>
+          )}
+          {report && (
+            <div className="mt-3 rounded-lg border bg-background p-3 text-xs max-h-60 overflow-y-auto whitespace-pre-wrap font-mono">
+              {report.slice(0, 2000)}
+              {report.length > 2000 && <p className="text-muted-foreground mt-2">...报告过长，已截取前 2000 字</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
 

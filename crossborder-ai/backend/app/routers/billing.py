@@ -27,8 +27,8 @@ PLANS = [
     {
         "id": "standard",
         "name": "Standard",
-        "price": 79,
-        "price_label": "¥79/月",
+        "price": 99,
+        "price_label": "¥99/月",
         "description": "适合个人卖家",
         "features": ["AI 生成不限次", "1688 抓取不限次", "全部 11 个平台", "16 种语言翻译", "AI 智能助手", "邮件支持"],
         "recommended": True,
@@ -36,8 +36,8 @@ PLANS = [
     {
         "id": "professional",
         "name": "Professional",
-        "price": 199,
-        "price_label": "¥199/月",
+        "price": 249,
+        "price_label": "¥249/月",
         "description": "适合工作室/团队",
         "features": ["所有 Standard 功能", "AI 商品主图生成", "Shopify 一键发布", "优先技术支持"],
         "recommended": False,
