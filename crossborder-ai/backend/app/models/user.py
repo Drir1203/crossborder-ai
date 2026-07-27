@@ -47,7 +47,7 @@ class User(Base):
 
     # ── 业务字段 ──────────────────────────────────────────────
     # credits（积分）用于消耗式计费，每次 AI 生成/抓取扣 1 分
-    credits: Mapped[int] = mapped_column(Integer, default=100)
+    credits: Mapped[int] = mapped_column(Integer, default=30)
     # plan（套餐）控制可用功能范围，free / standard / professional
     plan: Mapped[str] = mapped_column(String(50), default="free")
 

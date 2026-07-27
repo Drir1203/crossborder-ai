@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { CheckCircle2, CreditCard, ArrowRight, X, Copy, Check } from 'lucide-react'
+import { CheckCircle2, CreditCard, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,8 +20,8 @@ interface Plan {
 
 export default function BillingPage() {
   const { user } = useAuthStore()
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const [contact, setContact] = useState('')
 
   const { data } = useQuery({
     queryKey: ['plans'],
@@ -30,117 +30,131 @@ export default function BillingPage() {
       return res.data.plans as Plan[]
     },
   })
-
   const plans = data || []
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText('VeyaShip AI 套餐升级')
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  const upgradeMutation = useMutation({
+    mutationFn: async (planId: string) => {
+      const res = await apiClient.post('/billing/upgrade', { plan: planId, contact })
+      return res.data
+    },
+  })
+
+  if (!user) return null
+
+  const currentPlanName = user.plan === 'standard' ? 'Standard' : user.plan === 'professional' ? 'Professional' : 'Free'
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="text-center max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold tracking-tight">选择套餐</h1>
-        <p className="text-muted-foreground mt-2">按需选择，随时升级</p>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-3xl mx-auto">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold tracking-tight">套餐与账单</h1>
+        <p className="text-muted-foreground mt-1">按需选择，随时升级</p>
       </div>
 
-      {/* 当前套餐 */}
-      {user && (
-        <div className="text-center text-sm text-muted-foreground">
-          当前套餐：<Badge variant="secondary" className="capitalize">{user.plan}</Badge>
-          {' '}｜可用积分：<Badge variant="secondary">{user.credits_remaining}</Badge>
-        </div>
-      )}
+      {/* 当前状态 */}
+      <Card>
+        <CardContent className="p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">当前套餐</p>
+            <p className="text-lg font-semibold mt-0.5 capitalize">{currentPlanName}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">剩余积分</p>
+            <p className="text-lg font-semibold mt-0.5">{user.credits_remaining ?? user.credits}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 套餐对比 */}
-      <div className="grid gap-6 md:grid-cols-3 max-w-4xl mx-auto">
-        {plans.map((plan) => (
-          <Card
-            key={plan.id}
-            className={`relative ${plan.recommended ? 'border-primary shadow-lg ring-1 ring-primary' : ''} ${plan.id === user?.plan ? 'border-emerald-500' : ''}`}
-          >
-            {plan.recommended && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge>推荐</Badge>
-              </div>
-            )}
-            {plan.id === user?.plan && (
-              <div className="absolute -top-3 right-3">
-                <Badge variant="success">当前套餐</Badge>
-              </div>
-            )}
-            <CardHeader className="text-center pb-2">
-              <CardTitle className="text-xl">{plan.name}</CardTitle>
-              <p className="text-3xl font-bold mt-2">{plan.price_label}</p>
-              <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ul className="space-y-2">
-                {plan.features.map((f, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              {plan.id !== 'free' && plan.id !== user?.plan && (
-                <Button
-                  className="w-full"
-                  onClick={() => setSelectedPlan(plan)}
-                >
-                  {plan.price === 0 ? '免费开通' : '立即开通'}
-                  <ArrowRight className="h-4 w-4 ml-1" />
-                </Button>
+      <div className="grid md:grid-cols-3 gap-4">
+        {plans.map((plan) => {
+          const isCurrent = user.plan === plan.id
+          const isSelected = selectedPlan === plan.id
+          return (
+            <Card key={plan.id} className={`relative ${plan.recommended ? 'border-indigo-400 shadow-md' : ''} ${isCurrent ? 'border-emerald-400' : ''}`}>
+              {plan.recommended && !isCurrent && (
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">推荐</div>
               )}
-            </CardContent>
-          </Card>
-        ))}
+              {isCurrent && (
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">当前套餐</div>
+              )}
+              <CardContent className="p-5 space-y-4">
+                <div>
+                  <h3 className="font-semibold">{plan.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
+                </div>
+                <div>
+                  <span className="text-2xl font-bold">{plan.price === 0 ? '免费' : `¥${plan.price}`}</span>
+                  {plan.price > 0 && <span className="text-sm text-muted-foreground">/月</span>}
+                </div>
+                <ul className="space-y-2">
+                  {plan.features.map((f, i) => (
+                    <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-500 mt-0.5 shrink-0" />{f}
+                    </li>
+                  ))}
+                </ul>
+                {!isCurrent && plan.price > 0 && (
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    variant={plan.recommended ? 'default' : 'outline'}
+                    onClick={() => setSelectedPlan(plan.id)}
+                  >
+                    升级到 {plan.name}
+                  </Button>
+                )}
+                {isCurrent && <Button size="sm" className="w-full" variant="outline" disabled>当前套餐</Button>}
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
-      {/* 付款弹窗 */}
+      {/* 升级流程 */}
       {selectedPlan && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-md w-full relative">
-            <Button variant="ghost" size="icon" className="absolute right-2 top-2"
-              onClick={() => setSelectedPlan(null)}>
-              <X className="h-4 w-4" />
-            </Button>
-            <CardHeader className="text-center">
-              <CardTitle className="text-lg">开通 {selectedPlan.name} 套餐</CardTitle>
-              <p className="text-2xl font-bold text-primary mt-2">{selectedPlan.price_label}</p>
-            </CardHeader>
-            <CardContent className="space-y-4 text-center">
-              <div className="rounded-lg bg-muted p-6">
-                <p className="text-sm text-muted-foreground mb-4">请扫描下方二维码付款</p>
-                <div className="w-48 h-48 bg-muted-foreground/10 mx-auto rounded-lg flex items-center justify-center border-2 border-dashed">
-                  <CreditCard className="h-12 w-12 text-muted-foreground/40" />
+        <Card className="border-indigo-500/30">
+          <CardHeader>
+            <CardTitle className="text-sm">升级到 {plans.find(p => p.id === selectedPlan)?.name}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!upgradeMutation.data ? (
+              <>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">请输入你的联系方式（微信或手机号），付款后客服会联系你确认升级</p>
+                  <input
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    placeholder="微信号 / 手机号"
+                    className="w-full h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-indigo-400"
+                  />
                 </div>
-                <p className="text-xs text-muted-foreground mt-3">
-                  把你的微信/支付宝收款码放上去
-                </p>
+                <Button
+                  className="w-full"
+                  disabled={!contact.trim() || upgradeMutation.isPending}
+                  onClick={() => upgradeMutation.mutate(selectedPlan)}
+                >
+                  {upgradeMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />提交中...</> : '提交升级申请'}
+                </Button>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-700">
+                  <p className="font-medium">✅ 升级申请已提交</p>
+                  <p className="mt-1">{upgradeMutation.data.message}</p>
+                </div>
+                <div className="rounded-lg border p-4 space-y-2 text-sm">
+                  <p className="font-medium">付款信息</p>
+                  <p>金额：<strong>¥{upgradeMutation.data.amount}</strong></p>
+                  <p>订单号：<code className="bg-muted px-1 py-0.5 rounded text-xs">{upgradeMutation.data.order_id}</code></p>
+                  <p className="text-muted-foreground text-xs mt-2">转账请备注订单号，客服确认后立即升级。</p>
+                </div>
+                <Button variant="outline" className="w-full" onClick={() => { setSelectedPlan(null); upgradeMutation.reset() }}>
+                  完成
+                </Button>
               </div>
-
-              <div className="text-sm text-left space-y-2 bg-muted/50 rounded-lg p-3">
-                <p className="font-medium">付款后请：</p>
-                <ol className="text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>截图保存付款凭证</li>
-                  <li>扫码添加微信：<span className="font-medium text-foreground">你的微信号</span>
-                    <Button variant="ghost" size="icon" className="h-5 w-5 inline-flex ml-1" onClick={handleCopy}>
-                      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    </Button>
-                  </li>
-                  <li>发送截图，我帮你开通套餐</li>
-                </ol>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                通常 30 分钟内处理，工作时间更快
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </motion.div>
   )

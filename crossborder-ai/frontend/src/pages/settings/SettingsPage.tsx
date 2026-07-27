@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Settings, Globe, CheckCircle2, AlertCircle, Key, Eye, EyeOff, ExternalLink, Palette, X } from 'lucide-react'
+import { Settings, CheckCircle2, Palette, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,15 +26,10 @@ export default function SettingsPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="persona">品牌调性</TabsTrigger>
-          <TabsTrigger value="scraping">爬虫配置</TabsTrigger>
         </TabsList>
 
         <TabsContent value="persona" className="space-y-4">
           <PersonaForm />
-        </TabsContent>
-
-        <TabsContent value="scraping" className="space-y-4">
-          <ScrapingConfig />
         </TabsContent>
       </Tabs>
     </motion.div>
@@ -133,48 +128,3 @@ function PersonaForm() {
   )
 }
 
-function ScrapingConfig() {
-  const queryClient = useQueryClient()
-  const [apiKey, setApiKey] = useState('')
-  const [apiSecret, setApiSecret] = useState('')
-  const [showKey, setShowKey] = useState(false)
-
-  const { data } = useQuery({
-    queryKey: ['scraping-config'],
-    queryFn: async () => { const r = await apiClient.get('/settings/scraping'); return r.data },
-  })
-
-  useEffect(() => {
-    if (data) { setApiKey(data.api_key || ''); setApiSecret(data.api_secret || '') }
-  }, [data])
-
-  const saveMutation = useMutation({
-    mutationFn: async (body: any) => { const r = await apiClient.put('/settings/scraping', body); return r.data },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scraping-config'] }),
-  })
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-base"><Globe className="h-4 w-4" />商品数据接口</span>
-          <Badge variant={data?.configured ? 'success' : 'warning'}>{data?.configured ? '已配置' : '未配置'}</Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2"><Label>Onebound API Key</Label>
-          <div className="relative"><Input type={showKey ? 'text' : 'password'} value={apiKey} onChange={e => setApiKey(e.target.value)} className="pr-10" />
-            <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3" onClick={() => setShowKey(!showKey)}>
-              {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button></div>
-        </div>
-        <div className="space-y-2"><Label>API Secret</Label>
-          <Input type="password" value={apiSecret} onChange={e => setApiSecret(e.target.value)} />
-        </div>
-        <Button onClick={() => saveMutation.mutate({ api_key: apiKey, api_secret: apiSecret })} disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? '保存中...' : '保存'}
-        </Button>
-        {saveMutation.isSuccess && <p className="text-sm text-emerald-600 flex items-center gap-1"><CheckCircle2 className="h-4 w-4" />已保存</p>}
-      </CardContent>
-    </Card>
-  )
-}

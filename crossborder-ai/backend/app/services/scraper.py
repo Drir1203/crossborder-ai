@@ -22,6 +22,7 @@ from typing import Any, Optional
 
 import httpx
 from bs4 import BeautifulSoup
+from app.core.config import settings
 
 
 async def scrape_1688(
@@ -29,6 +30,10 @@ async def scrape_1688(
     api_key: str = "",
     api_secret: str = "",
 ) -> dict[str, Any]:
+    # 优先用 .env 配置的平台级 Key，未配置则用调用方传入的 Key
+    if not api_key and settings.ONEBOUND_API_KEY:
+        api_key = settings.ONEBOUND_API_KEY
+        api_secret = settings.ONEBOUND_API_SECRET or api_secret
     """【核心】抓取 1688 商品信息
 
     执行策略（双保险）：
