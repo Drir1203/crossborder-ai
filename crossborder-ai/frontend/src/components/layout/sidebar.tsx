@@ -32,8 +32,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     { icon: Bot, label: t('nav.agent'), path: '/app/agent' },
     { icon: Image, label: t('nav.images'), path: '/app/images' },
     { icon: Upload, label: t('nav.batch'), path: '/app/batch' },
-    { icon: Radar, label: t('nav.radar'), path: '/app/radar' },
-    { icon: Calculator, label: t('nav.ledger'), path: '/app/ledger' },
     { icon: Globe, label: t('nav.shopify'), path: '/app/shopify' },
     { icon: CreditCard, label: t('nav.billing'), path: '/app/billing' },
     { icon: Settings, label: t('nav.settings'), path: '/app/settings' },
