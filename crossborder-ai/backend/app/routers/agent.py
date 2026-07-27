@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.rate_limit import RateLimit
+from app.core.access_control import check_feature_access
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.conversation import Conversation, ConversationMessage
@@ -124,6 +125,9 @@ async def run_agent(
 ):
     """执行 AI Agent 指令（自动保存对话历史）"""
     from uuid import UUID
+
+    if not check_feature_access(current_user, "agent"):
+        raise HTTPException(status_code=403, detail="AI 智能助手仅限 Standard 及以上套餐使用")
 
     if current_user.credits < 1:
         raise HTTPException(status_code=402, detail="积分不足")

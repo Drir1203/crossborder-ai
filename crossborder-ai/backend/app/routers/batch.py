@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.rate_limit import RateLimit
+from app.core.access_control import check_feature_access
 from app.dependencies import get_current_user
 from app.models.batch_job import BatchJob
 from app.models.product import Product
@@ -228,6 +229,9 @@ async def batch_process_with_ai(
     3. AI 生成 Listing（标题/描述/卖点）
     4. 标记完成
     """
+    if not check_feature_access(current_user, "batch_ai"):
+        raise HTTPException(status_code=403, detail="批量 AI 处理仅限 Standard 及以上套餐使用")
+
     if current_user.credits < len([1]):
         raise HTTPException(status_code=402, detail="积分不足")
 

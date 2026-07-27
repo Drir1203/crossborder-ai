@@ -20,6 +20,7 @@ from app.dependencies import get_current_user
 from app.models.persona import Persona
 from app.models.user import User
 from app.services.ai.aliyun_image import AliyunImageService
+from app.core.access_control import check_feature_access
 from app.services.ai.replicate import ReplicateService
 from pydantic import BaseModel, Field
 
@@ -94,6 +95,9 @@ async def generate_image(
 
     前端通过 GET /api/v1/images/status/{task_id} 轮询结果。
     """
+    if not check_feature_access(current_user, "ai_image"):
+        raise HTTPException(status_code=403, detail="图片生成功能仅限专业版套餐使用，请升级套餐")
+
     if not settings.ALIYUN_DASHSCOPE_API_KEY and not settings.REPLICATE_API_KEY:
         raise HTTPException(status_code=400, detail="图片生成功能暂未配置")
 

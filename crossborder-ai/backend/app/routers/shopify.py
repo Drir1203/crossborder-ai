@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.access_control import check_feature_access
 from app.dependencies import get_current_user
 from app.models.product import Product
 from app.models.shopify_channel import ShopifyChannel
@@ -226,12 +227,17 @@ async def push_product(
     """推送商品到 Shopify（含合规审查）
 
     流程：
-    1. 查商品
+    1. 套餐检查
+    2. 查商品
     2. 查 Shopify 渠道
     3. 合规审查 → 不通过则拦截
     4. 调 Shopify API 创建商品
     """
     from uuid import UUID
+
+    # 套餐检查
+    if not check_feature_access(current_user, "shopify_publish"):
+        raise HTTPException(status_code=403, detail="Shopify 发布功能仅限 Standard 及以上套餐使用")
 
     # 查商品
     try:

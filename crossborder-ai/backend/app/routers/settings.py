@@ -16,6 +16,41 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
+
+# ── 白名单管理（测试账号免限制） ────────────────────────────
+
+class WhitelistRequest(BaseModel):
+    email: str = Field(..., description="要添加/移除的邮箱")
+
+
+@router.post("/whitelist/add")
+async def add_whitelist(
+    payload: WhitelistRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """添加白名单账号（测试账号不受套餐限制）"""
+    from app.core.access_control import add_whitelist as _add
+    _add(payload.email)
+    return {"message": f"已添加白名单: {payload.email}"}
+
+
+@router.post("/whitelist/remove")
+async def remove_whitelist(
+    payload: WhitelistRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """移除白名单账号"""
+    from app.core.access_control import remove_whitelist as _remove
+    _remove(payload.email)
+    return {"message": f"已移除白名单: {payload.email}"}
+
+
+@router.get("/whitelist")
+async def list_whitelist():
+    """查看所有白名单账号"""
+    from app.core.access_control import WHITELIST_EMAILS
+    return {"emails": list(WHITELIST_EMAILS)}
+
 # ════════════════════════════════════════════════════════════════
 # 爬虫配置
 # ════════════════════════════════════════════════════════════════
