@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot,
@@ -53,7 +53,47 @@ export default function AgentPage() {
     },
   ])
   const [input, setInput] = useState('')
+  const [conversationId, setConversationId] = useState<string>('')
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // 加载最近的对话
+  const { data: convList } = useQuery({
+    queryKey: ['agent-conversations'],
+    queryFn: async () => {
+      const r = await apiClient.get('/agent/conversations')
+      return r.data.items || []
+    },
+  })
+
+  // 如果有对话，加载第一条
+  useEffect(() => {
+    if (convList && convList.length > 0 && !conversationId) {
+      setConversationId(convList[0].id)
+    }
+  }, [convList])
+
+  // 加载对话历史消息
+  const { data: convData } = useQuery({
+    queryKey: ['agent-conversation', conversationId],
+    queryFn: async () => {
+      if (!conversationId) return null
+      const r = await apiClient.get(`/agent/conversations/${conversationId}`)
+      return r.data
+    },
+    enabled: !!conversationId,
+  })
+
+  // 对话历史加载后更新消息列表
+  useEffect(() => {
+    if (convData?.messages && convData.messages.length > 0) {
+      setMessages(convData.messages.map((m: any) => ({
+        role: m.role,
+        content: m.content,
+        actionResults: m.steps,
+        timestamp: new Date(m.created_at),
+      })))
+    }
+  }, [convData])
 
   // 自动滚动到底部
   useEffect(() => {
@@ -63,10 +103,11 @@ export default function AgentPage() {
   // Agent 执行
   const agentMutation = useMutation({
     mutationFn: async (instruction: string) => {
-      const res = await apiClient.post('/agent/run', { instruction })
+      const res = await apiClient.post('/agent/run', { instruction, conversation_id: conversationId })
       return res.data
     },
     onSuccess: (data) => {
+      if (data.conversation_id) setConversationId(data.conversation_id)
       setMessages((prev) => [
         ...prev,
         {

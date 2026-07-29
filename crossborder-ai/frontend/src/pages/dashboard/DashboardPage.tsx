@@ -148,10 +148,10 @@ export default function DashboardPage() {
       bg: 'bg-emerald-500/10',
     },
     {
-      title: 'AI 助手',
-      value: '对话式',
-      sub: '一句话搞定操作',
-      icon: Bot,
+      title: '品类分析',
+      value: 'AI 驱动',
+      sub: '输入品类名开始分析',
+      icon: TrendingUp,
       color: 'text-violet-500',
       bg: 'bg-violet-500/10',
     },
@@ -226,9 +226,18 @@ export default function DashboardPage() {
             </div>
           )}
           {report && (
-            <div className="mt-3 rounded-lg border bg-background p-3 text-xs max-h-60 overflow-y-auto whitespace-pre-wrap font-mono">
-              {report.slice(0, 2000)}
-              {report.length > 2000 && <p className="text-muted-foreground mt-2">...报告过长，已截取前 2000 字</p>}
+            <div className="mt-3 rounded-lg border bg-background p-3 text-xs max-h-80 overflow-y-auto leading-relaxed">
+              {report.slice(0, 2500).split('\n').map((line, i) => {
+                if (!line.trim()) return <p key={i} className="my-1" />
+                if (line.startsWith('# ')) return <p key={i} className="text-sm font-bold text-slate-800 mt-3 mb-1">{line.replace('# ','')}</p>
+                if (line.startsWith('## ')) return <p key={i} className="text-sm font-semibold text-slate-700 mt-2 mb-1">{line.replace('## ','')}</p>
+                if (line.startsWith('|')) return <p key={i} className="font-mono text-[11px] text-slate-600">{line}</p>
+                if (line.match(/^\d+\./)) return <p key={i} className="ml-2 text-[11px] text-slate-600">{line}</p>
+                if (line.startsWith('-')) return <p key={i} className="ml-2 text-[11px] text-slate-600">{line}</p>
+                if (line.includes('**')) return <p key={i} className="text-[11px] text-slate-700"><strong>{line.replace(/\*\*/g,'')}</strong></p>
+                return <p key={i} className="text-[11px] text-slate-600">{line}</p>
+              })}
+              {report.length > 2500 && <p className="text-muted-foreground mt-2 text-[11px]">...报告较长，已截取前 2500 字</p>}
             </div>
           )}
         </CardContent>
