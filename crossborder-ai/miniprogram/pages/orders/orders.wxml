@@ -1,0 +1,28 @@
+<view class="page">
+  <!-- 店铺选择 -->
+  <picker class="picker" range="{{channels}}" range-key="shop_name" bindchange="onChannelChange">
+    <view class="picker-btn">
+      <text wx:if="{{channels.length > 0}}">{{channels[0].shop_name}}</text>
+      <text wx:else>选择店铺</text>
+      <text class="picker-arrow">▼</text>
+    </view>
+  </picker>
+
+  <!-- 订单列表 -->
+  <view class="order-card" wx:for="{{orders}}" wx:key="id">
+    <view class="order-header">
+      <text class="order-number">#{{item.order_number}}</text>
+      <text class="order-amount">{{formatPrice(item.total_price)}} {{item.currency}}</text>
+    </view>
+    <view class="order-body">
+      <text class="order-status {{item.financial_status}}">{{item.financial_status}}</text>
+      <text class="order-date">{{formatDate(item.created_at)}}</text>
+    </view>
+    <text class="order-email" wx:if="{{item.customer_email}}">{{item.customer_email}}</text>
+  </view>
+
+  <view class="empty" wx:if="{{!loading && orders.length === 0}}">
+    <text>暂无订单</text>
+  </view>
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+</view>
