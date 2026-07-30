@@ -1,0 +1,45 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/category/category",
+    "pages/profit/profit",
+    "pages/agent/agent"
+  ],
+  "window": {
+    "navigationBarTitleText": "VeyaShip AI",
+    "navigationBarTextStyle": "white",
+    "navigationBarBackgroundColor": "#4f46e5",
+    "backgroundColor": "#f8fafc"
+  },
+  "tabBar": {
+    "color": "#94a3b8",
+    "selectedColor": "#4f46e5",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "images/home.png"
+      },
+      {
+        "pagePath": "pages/category/category",
+        "text": "品类分析",
+        "iconPath": "images/trend.png"
+      },
+      {
+        "pagePath": "pages/agent/agent",
+        "text": "AI 助手",
+        "iconPath": "images/agent.png"
+      },
+      {
+        "pagePath": "pages/profit/profit",
+        "text": "利润计算",
+        "iconPath": "images/calc.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "requiredPrivateInfos": ["getLocation"]
+}

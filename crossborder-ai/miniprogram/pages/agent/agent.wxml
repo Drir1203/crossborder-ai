@@ -1,0 +1,23 @@
+<view class="page">
+  <scroll-view class="chat-box" scroll-y scroll-into-view="bottom" scroll-with-animation>
+    <view wx:for="{{messages}}" wx:key="index" class="msg {{item.role === 'user' ? 'msg-user' : 'msg-ai'}}">
+      <view class="msg-bubble">{{item.content}}</view>
+    </view>
+    <view id="bottom"></view>
+  </scroll-view>
+
+  <view class="quick-actions" wx:if="{{messages.length <= 1}}">
+    <view class="quick-tag" bindtap="onQuickTap" data-text="蓝牙耳机能不能做">🎧 分析蓝牙耳机</view>
+    <view class="quick-tag" bindtap="onQuickTap" data-text="帮我算利润，售价$19.99，成本¥30，运费¥15">💰 算利润</view>
+    <view class="quick-tag" bindtap="onQuickTap" data-text="检查这段文本的违禁词：最好的商品">🔍 合规检查</view>
+  </view>
+
+  <view class="input-bar">
+    <input class="input-field" placeholder="问 AI 任何问题..." value="{{input}}" bindinput="onInput"
+      disabled="{{loading}}" />
+    <button class="send-btn" bindtap="onSend" disabled="{{!input.trim() || loading}}">
+      <text wx:if="{{loading}}">...</text>
+      <text wx:else>发送</text>
+    </button>
+  </view>
+</view>

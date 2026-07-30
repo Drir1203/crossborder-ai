@@ -19,8 +19,10 @@
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -193,3 +195,62 @@ async def get_me(
         UserResponse: 用户信息（不会暴露密码哈希）
     """
     return current_user
+
+
+class WeChatLoginRequest(BaseModel):
+    code: str = Field(..., description="微信小程序 wx.login() 返回的 code")
+
+
+@router.post("/wx-login", response_model=TokenResponse)
+async def wechat_login(
+    payload: WeChatLoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """微信小程序登录
+
+    流程：
+    1. 小程序调 wx.login() 获取 code
+    2. 后端用 code 向微信服务器换 openid
+    3. 查找或创建用户
+    4. 返回 JWT token
+    """
+    import httpx
+
+    app_id = settings.WEIXIN_APP_ID
+    app_secret = settings.WEIXIN_APP_SECRET
+    if not app_id or not app_secret:
+        raise HTTPException(status_code=400, detail="微信登录未配置")
+
+    # 向微信服务器换 openid
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.weixin.qq.com/sns/jscode2session",
+            params={
+                "appid": app_id,
+                "secret": app_secret,
+                "js_code": payload.code,
+                "grant_type": "authorization_code",
+            },
+        )
+        data = resp.json()
+        if "openid" not in data:
+            raise HTTPException(status_code=400, detail="微信登录失败")
+
+        openid = data["openid"]
+
+    # 查找或创建用户
+    result = await db.execute(select(User).where(User.email == f"wx_{openid}@weixin.com"))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        import uuid
+        user = User(
+            email=f"wx_{openid}@weixin.com",
+            username=f"wx_{openid[:8]}",
+            password_hash=hash_password(str(uuid.uuid4())),
+        )
+        db.add(user)
+        await db.flush()
+
+    access_token = create_access_token(subject=str(user.id))
+    return TokenResponse(access_token=access_token, token_type="bearer")

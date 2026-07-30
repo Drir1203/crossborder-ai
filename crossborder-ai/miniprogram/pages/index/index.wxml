@@ -1,0 +1,47 @@
+<view class="page">
+  <!-- 未登录 -->
+  <block wx:if="{{!loggedIn}}">
+    <view class="login-box">
+      <view class="logo">VeyaShip AI</view>
+      <view class="subtitle">跨境电商 AI 选品决策引擎</view>
+      <view class="desc">输入品类名，AI 自动分析市场容量、竞争格局、利润空间</view>
+      <button class="btn-primary" bindtap="handleLogin">微信一键登录</button>
+      <view class="footer-text">首次登录自动创建账号</view>
+    </view>
+  </block>
+
+  <!-- 已登录 -->
+  <block wx:else>
+    <view class="header">
+      <text class="header-title">概览</text>
+    </view>
+
+    <view class="stats-grid">
+      <view class="stat-card" bindtap="goCategory">
+        <text class="stat-value">{{stats?.products?.total || 0}}</text>
+        <text class="stat-label">商品</text>
+      </view>
+      <view class="stat-card" bindtap="goCategory">
+        <text class="stat-value">{{stats?.products?.this_month || 0}}</text>
+        <text class="stat-label">本月新增</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-value">{{stats?.credits?.remaining || 0}}</text>
+        <text class="stat-label">剩余积分</text>
+      </view>
+    </view>
+
+    <view class="menu-grid">
+      <view class="menu-item" bindtap="goCategory">
+        <text class="menu-icon">📊</text>
+        <text class="menu-label">品类分析</text>
+      </view>
+      <view class="menu-item" bindtap="goProfit">
+        <text class="menu-icon">💰</text>
+        <text class="menu-label">利润计算</text>
+      </view>
+    </view>
+  </block>
+
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+</view>

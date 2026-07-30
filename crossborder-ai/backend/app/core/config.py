@@ -140,6 +140,10 @@ class Settings(BaseSettings):
     # --- Redis ---
     REDIS_URL: Optional[str] = None
 
+    # --- WeChat Mini Program ---
+    WEIXIN_APP_ID: Optional[str] = None
+    WEIXIN_APP_SECRET: Optional[str] = None
+
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
 

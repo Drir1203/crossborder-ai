@@ -1,0 +1,60 @@
+<view class="page">
+  <view class="form-card">
+    <view class="form-group">
+      <text class="form-label">售价（外币）</text>
+      <input class="form-input" type="digit" value="{{form.selling_price}}" data-field="selling_price" bindinput="onInput" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">平台费率</text>
+      <input class="form-input" type="digit" value="{{form.platform_fee_rate}}" data-field="platform_fee_rate" bindinput="onInput" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">商品成本（CNY）</text>
+      <input class="form-input" type="digit" value="{{form.product_cost}}" data-field="product_cost" bindinput="onInput" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">运费（CNY）</text>
+      <input class="form-input" type="digit" value="{{form.shipping_cost}}" data-field="shipping_cost" bindinput="onInput" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">广告费（CNY）</text>
+      <input class="form-input" type="digit" value="{{form.advertising_cost}}" data-field="advertising_cost" bindinput="onInput" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">汇率</text>
+      <input class="form-input" type="digit" value="{{form.exchange_rate}}" data-field="exchange_rate" bindinput="onInput" />
+    </view>
+
+    <button class="calc-btn" bindtap="onCalculate" disabled="{{loading}}">
+      {{loading ? '计算中...' : '计算净利润'}}
+    </button>
+  </view>
+
+  <view class="result" wx:if="{{result}}">
+    <view class="result-row">
+      <text>折合人民币售价</text>
+      <text class="result-value green">¥{{result.selling_price_cny}}</text>
+    </view>
+    <view class="result-row">
+      <text>平台费</text>
+      <text class="result-value red">-¥{{result.platform_fee}}</text>
+    </view>
+    <view class="result-row">
+      <text>总成本</text>
+      <text class="result-value red">-¥{{result.total_cost}}</text>
+    </view>
+    <view class="result-divider"></view>
+    <view class="result-row">
+      <text class="result-label-bold">净利润</text>
+      <text class="result-value-bold {{result.net_profit >= 0 ? 'green' : 'red'}}">
+        {{result.net_profit >= 0 ? '+' : ''}}¥{{result.net_profit}}
+      </text>
+    </view>
+    <view class="result-row">
+      <text>利润率</text>
+      <text class="result-value {{result.profit_margin >= 0 ? 'green' : 'red'}}">
+        {{result.profit_margin}}%
+      </text>
+    </view>
+  </view>
+</view>

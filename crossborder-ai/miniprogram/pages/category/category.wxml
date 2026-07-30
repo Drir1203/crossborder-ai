@@ -1,0 +1,36 @@
+<view class="page">
+  <view class="search-box">
+    <input class="search-input" placeholder="输入品类名，如：蓝牙耳机" value="{{keyword}}" bindinput="onKeywordInput" />
+    <button class="search-btn" bindtap="onAnalyze" disabled="{{loading}}">
+      <text wx:if="{{loading}}">分析中...</text>
+      <text wx:else>AI 分析</text>
+    </button>
+  </view>
+
+  <!-- 历史 -->
+  <view class="history" wx:if="{{history.length > 0}}">
+    <view class="history-header">
+      <text class="history-title">最近搜索</text>
+      <text class="history-clear" bindtap="onClear">清空</text>
+    </view>
+    <scroll-view class="history-tags" scroll-x>
+      <view class="history-tag" wx:for="{{history}}" wx:key="index"
+        bindtap="onHistoryTap" data-keyword="{{item}}">{{item}}</view>
+    </scroll-view>
+  </view>
+
+  <!-- 报告 -->
+  <view class="report" wx:if="{{report}}">
+    <view class="report-content">
+      <text wx:for="{{report.split('\n')}}" wx:key="index" class="report-line">{{item}}</text>
+    </view>
+  </view>
+
+  <view class="loading" wx:if="{{loading}}">AI 正在分析市场数据...</view>
+
+  <!-- 空状态 -->
+  <view class="empty" wx:if="{{!report && !loading}}">
+    <text class="empty-icon">📊</text>
+    <text class="empty-text">输入品类名，AI 自动分析市场</text>
+  </view>
+</view>
