@@ -101,6 +101,12 @@ class AgentOrchestrator:
                 {"action": "generate_listing", "critical": False},
             ],
         },
+        "store_check": {
+            "name": "整店巡检",
+            "steps": [
+                {"action": "store_check", "critical": True, "description": "检查所有商品状态"},
+            ],
+        },
         "select_products": {
             "name": "AI 选品决策",
             "steps": [
@@ -176,6 +182,7 @@ class AgentOrchestrator:
 - 如果用户没有明确说要做什么，引导用户使用工具
 - 用户提到分析/市场/能不能做/品类 → 用 analyze_category
 - 用户提到选品/推荐/做点什么/想做XX → 用 select_products
+- 用户提到检查店铺/巡检/看看我的商品 → 用 store_check
 - 用户提到商品链接 + 能不能做/值不值得 → 用 analyze_product_decision
 - 用户提到商品链接 → 用 scrape_1688
 - 用户提到生成/发布/上架 → 用 generate_listing
@@ -214,6 +221,10 @@ class AgentOrchestrator:
 8. calculate_profit — 净利计算
    参数: {"selling_price": 售价, "product_cost": 成本, "platform_fee_rate": 费率}
 
+9. store_check — 整店巡检
+   参数: 无（检查当前用户所有商品）
+   输出: 有问题的商品列表（缺标题/价格等）
+
 6. answer — 【仅当其他工具都不适用时】回答用户问题
    参数: {"message": "回答内容"}
    注意: 这是最后选项，优先用上面的工具
@@ -247,6 +258,8 @@ class AgentOrchestrator:
                 return await self._do_analyze_product_decision(params)
             elif action == "select_products":
                 return await self._do_select_products(params)
+            elif action == "store_check":
+                return await self._do_store_check(params)
             elif action == "create_product":
                 return await self._do_create_product(params)
             elif action == "generate_listing":
@@ -478,6 +491,57 @@ class AgentOrchestrator:
             "status": "success",
             "data": {"passed": passed, "violations": violations},
             "summary": "合规审查通过" if passed else f"发现违规内容：{'、'.join(violations)}",
+        }
+
+    async def _do_store_check(self, params: dict) -> dict:
+        """整店巡检：检查用户所有商品，找出问题"""
+        from app.models.product import Product
+        from app.routers.shopify import compliance_check
+
+        # 获取用户所有商品
+        result = await self.db.execute(
+            select(Product).where(Product.user_id == self.user.id).order_by(Product.created_at.desc())
+        )
+        products = result.scalars().all()
+
+        if not products:
+            return {"action": "store_check", "status": "success", "data": {"total": 0, "issues": []}, "summary": "暂无商品，先去添加商品吧"}
+
+        issues = []
+        ok_count = 0
+
+        for p in products:
+            product_issues = []
+            if not p.title:
+                product_issues.append("缺标题")
+            if not p.price:
+                product_issues.append("缺价格")
+            if not p.url:
+                product_issues.append("缺链接")
+            if p.title and p.price:
+                ok_count += 1
+
+            if product_issues:
+                issues.append({
+                    "id": str(p.id),
+                    "title": p.title or "未命名商品",
+                    "price": p.price,
+                    "issues": product_issues,
+                })
+
+        total = len(products)
+        issue_count = len(issues)
+        healthy = total - issue_count
+
+        summary = f"巡检完成：共 {total} 个商品，{issue_count} 个有问题，{healthy} 个正常"
+        if issues:
+            summary += f"。待处理：{issue_count} 个"
+
+        return {
+            "action": "store_check",
+            "status": "success",
+            "data": {"total": total, "healthy": healthy, "issues": issues},
+            "summary": summary,
         }
 
     async def _do_analyze_product_decision(self, params: dict) -> dict:
