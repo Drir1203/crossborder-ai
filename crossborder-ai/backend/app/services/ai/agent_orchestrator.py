@@ -372,16 +372,45 @@ class AgentOrchestrator:
             return {"action": "analyze_category", "status": "failed", "error": str(e)}
 
     async def _do_compliance(self, params: dict) -> dict:
-        """合规审查"""
+        """合规审查（正则 + AI 双重检测）"""
         from app.routers.shopify import compliance_check
+        from app.services.ai.deepseek import DeepSeekService
+
         text = params.get("text", "")
-        violations = compliance_check(text)
+        if not text:
+            return {"action": "compliance_check", "status": "failed", "error": "缺少要检查的文本"}
+
+        violations = []
+
+        # 第一层：广告法违禁词正则
+        regex_violations = compliance_check(text)
+        violations.extend(regex_violations)
+
+        # 第二层：AI 检测不当用语（侮辱、攻击、虚假宣传等）
+        try:
+            llm = DeepSeekService()
+            ai_result = await llm.generate(
+                "你是电商内容合规审核员。判断以下文本是否存在问题，只返回JSON。",
+                f"检查文本是否包含：1)侮辱/攻击性用语 2)虚假宣传 3)绝对化用语 4)其他违规内容。\n文本：{text}\n返回 JSON: {{\"has_issue\": true/false, \"issue_type\": \"类型\", \"reason\": \"原因\"}}",
+                max_tokens=300,
+            )
+            import json as _json
+            import re as _re
+            match = _re.search(r'\{.*\}', ai_result, _re.DOTALL)
+            if match:
+                data = _json.loads(match.group())
+                if data.get("has_issue"):
+                    issue = data.get("reason", data.get("issue_type", "内容不当"))
+                    violations.append(issue)
+        except Exception:
+            pass  # AI 检测失败则只依赖正则
+
         passed = len(violations) == 0
         return {
             "action": "compliance_check",
             "status": "success",
             "data": {"passed": passed, "violations": violations},
-            "summary": "合规审查通过" if passed else f"发现违禁词：{', '.join(violations)}",
+            "summary": "合规审查通过" if passed else f"发现违规内容：{'、'.join(violations)}",
         }
 
     async def _do_push_to_shopify(self, params: dict) -> dict:

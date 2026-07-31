@@ -70,8 +70,12 @@ async def ai_compliance_check(text: str) -> dict:
         from app.services.ai.deepseek import DeepSeekService
         llm = DeepSeekService()
         prompt = (
-            "你是 Temu/Amazon 平台合规审核员。检查以下商品文本是否含平台违规风险。"
-            "违规类型包括：虚假宣传、夸大功效、绝对化用语、价格欺诈、侵权风险。\n\n"
+            "你是电商内容合规审核员。检查以下文本是否存在问题。\n"
+            "违规类型包括：\n"
+            "1. 侮辱/攻击性用语（如：傻子、白痴、蠢货等）\n"
+            "2. 虚假宣传、夸大功效\n"
+            "3. 绝对化用语（最好、第一、100%等）\n"
+            "4. 其他违规内容\n\n"
             f"文本：{text[:2000]}\n\n"
             "返回 JSON：{\"safe\": boolean, \"reason\": string|null}\n"
             "safe=false 时 reason 说明违规原因，safe=true 时 reason 为 null。"
@@ -213,8 +217,14 @@ async def list_channels(
 async def check_compliance(
     payload: ComplianceRequest,
 ):
-    """合规审查：检测文本中的违禁词"""
+    """合规审查：正则检测违禁词 + AI 检测不当用语"""
     violations = compliance_check(payload.text)
+
+    # AI 二次检测不当内容
+    ai_result = await ai_compliance_check(payload.text)
+    if not ai_result.get("safe", True):
+        violations.append(ai_result.get("reason", "内容不当"))
+
     return ComplianceResult(passed=len(violations) == 0, violations=violations)
 
 
