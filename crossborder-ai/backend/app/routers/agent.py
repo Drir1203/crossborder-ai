@@ -29,6 +29,7 @@ router = APIRouter(prefix="/agent", tags=["AI 智能助手"])
 async def list_workflows():
     return {
         "workflows": [
+            {"id": "decision_and_list", "name": "判断商品 + 生成 Listing", "desc": "分析能不能做 → 生成 Listing → 合规修复", "cost": 2},
             {"id": "1688_to_shopify", "name": "1688 → Shopify 上架", "desc": "抓取商品 → AI 生成 Listing → 发布到 Shopify", "cost": 2},
             {"id": "1688_to_amazon", "name": "1688 → Amazon 上架", "desc": "抓取商品 → AI 生成 Amazon Listing", "cost": 2},
             {"id": "scrape_and_list", "name": "抓取 + 生成 Listing", "desc": "抓取 1688 商品 → AI 生成 Listing", "cost": 1},

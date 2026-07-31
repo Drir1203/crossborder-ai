@@ -101,6 +101,16 @@ class AgentOrchestrator:
                 {"action": "generate_listing", "critical": False},
             ],
         },
+        "decision_and_list": {
+            "name": "判断商品 + 生成 Listing",
+            "steps": [
+                {"action": "analyze_product_decision", "critical": True, "description": "判断这个品能不能做"},
+                {"action": "scrape_1688", "critical": True},
+                {"action": "create_product", "critical": True},
+                {"action": "generate_listing", "critical": False, "description": "AI 生成 Listing"},
+                {"action": "compliance_fix", "critical": False, "description": "合规自动修复"},
+            ],
+        },
     }
 
     async def run_workflow(self, workflow_name: str, params: dict) -> dict:
@@ -159,6 +169,7 @@ class AgentOrchestrator:
 - 你必须选择具体的工具来执行，不能只是回答问题
 - 如果用户没有明确说要做什么，引导用户使用工具
 - 用户提到分析/市场/能不能做/品类 → 用 analyze_category
+- 用户提到商品链接 + 能不能做/值不值得 → 用 analyze_product_decision
 - 用户提到商品链接 → 用 scrape_1688
 - 用户提到生成/发布/上架 → 用 generate_listing
 - 用户提到利润/成本/计算 → 用 calculate_profit
@@ -170,7 +181,11 @@ class AgentOrchestrator:
    参数: {"keyword": "品类关键词，如蓝牙耳机"}
    输出: 市场容量、竞争格局、利润模型、选品建议
 
-2. scrape_1688 — 抓取1688商品
+2. analyze_product_decision — 单品决策
+   参数: {"url": "1688商品链接"}
+   输出: 能不能做、利润估算、建议定价
+
+3. scrape_1688 — 抓取1688商品
    参数: {"url": "1688商品链接"}
    输出: 商品标题、价格、图片
 
@@ -217,12 +232,16 @@ class AgentOrchestrator:
         try:
             if action == "scrape_1688":
                 return await self._do_scrape(params)
+            elif action == "analyze_product_decision":
+                return await self._do_analyze_product_decision(params)
             elif action == "create_product":
                 return await self._do_create_product(params)
             elif action == "generate_listing":
                 return await self._do_generate_listing(params)
             elif action == "compliance_check":
                 return await self._do_compliance(params)
+            elif action == "compliance_fix":
+                return await self._do_compliance_fix(params)
             elif action == "push_to_shopify":
                 return await self._do_push_to_shopify(params)
             elif action == "calculate_profit":
@@ -412,6 +431,128 @@ class AgentOrchestrator:
             "data": {"passed": passed, "violations": violations},
             "summary": "合规审查通过" if passed else f"发现违规内容：{'、'.join(violations)}",
         }
+
+    async def _do_analyze_product_decision(self, params: dict) -> dict:
+        """单品决策：判断一个 1688 商品能不能做
+
+        流程：
+        1. 抓取 1688 商品信息
+        2. 算成本（采购价 + 运费）
+        3. AI 分析市场竞争力
+        4. 输出：能做/不能做 + 理由 + 建议定价
+        """
+        from app.services.ai.deepseek import DeepSeekService
+
+        url = params.get("url", "")
+        if not url:
+            return {"action": "analyze_product_decision", "status": "failed", "error": "缺少商品链接"}
+
+        # 1. 抓取商品
+        try:
+            data = await scrape_1688(url, api_key=params.get("api_key", ""), api_secret=params.get("api_secret", ""))
+        except Exception as e:
+            return {"action": "analyze_product_decision", "status": "failed", "error": f"抓取失败：{str(e)}"}
+
+        title = data.get("title", "")
+        price = data.get("price")  # 1688 供货价
+        sales = data.get("sales_count")
+        shop = data.get("shop_name")
+
+        if not title:
+            return {"action": "analyze_product_decision", "status": "failed", "error": "无法获取商品标题"}
+
+        # 2. 算成本
+        cost_cny = price or 0
+        # 预估运费（跨境电商，按重量估，这里简化）
+        shipping_cny = 15
+        total_cost = cost_cny + shipping_cny
+
+        # 3. AI 分析
+        llm = DeepSeekService()
+        try:
+            analysis = await llm.generate(
+                "你是跨境电商选品专家。根据商品信息和采购成本，判断这个品能不能做，给出结论和建议。",
+                f"商品：{title}\n采购价：¥{cost_cny}\n预估总成本：¥{total_cost}\n销量参考：{sales or '未知'}\n店铺：{shop or '未知'}\n\n"
+                f"请分析：\n1. Amazon 上类似产品的价格带\n2. 这个品的竞争力\n3. 利润空间估算（假设定价为采购价 3-5 倍）\n4. 最终结论：能做/谨慎/不能做 + 理由\n5. 建议定价和预计月利润",
+                max_tokens=1500,
+            )
+        except Exception:
+            analysis = f"AI 分析暂不可用，基础数据：采购价 ¥{cost_cny}，建议定价为采购价的 3-5 倍。"
+
+        return {
+            "action": "analyze_product_decision",
+            "status": "success",
+            "data": {
+                "url": url,
+                "title": title,
+                "cost_cny": cost_cny,
+                "analysis": analysis,
+            },
+            "summary": f"已分析「{title[:30]}」：采购价 ¥{cost_cny}",
+        }
+
+    async def _do_compliance_fix(self, params: dict) -> dict:
+        """合规自动修复：检查文本，发现违禁词自动改写"""
+        from app.routers.shopify import compliance_check
+        from app.services.ai.deepseek import DeepSeekService
+
+        text = params.get("text", "")
+        if not text:
+            return {"action": "compliance_fix", "status": "failed", "error": "缺少文本"}
+
+        # 第一层：正则检查
+        regex_violations = compliance_check(text)
+
+        # 第二层：AI 检查
+        ai_issue = ""
+        try:
+            llm = DeepSeekService()
+            result = await llm.generate(
+                "你是电商合规审核员。检查文本是否有问题，只返回JSON。",
+                f"检查文本：{text}\n是否存在：侮辱性用语、虚假宣传、绝对化用语。\n返回 JSON: {{\"has_issue\": true/false, \"reason\": \"\"}}",
+                max_tokens=200,
+            )
+            import json as _json
+            import re as _re
+            match = _re.search(r'\{.*\}', result, _re.DOTALL)
+            if match:
+                data = _json.loads(match.group())
+                if data.get("has_issue"):
+                    ai_issue = data.get("reason", "内容不当")
+        except Exception:
+            pass
+
+        violations = list(regex_violations) + ([ai_issue] if ai_issue else [])
+
+        if not violations:
+            return {
+                "action": "compliance_fix",
+                "status": "success",
+                "data": {"passed": True, "fixed": False, "text": text},
+                "summary": "合规审查通过，无需修改",
+            }
+
+        # 发现违规 → AI 改写
+        try:
+            llm = DeepSeekService()
+            fixed_text = await llm.generate(
+                "你是电商文案合规优化师。重写文本，去掉违规内容，保留原意，输出优化后的文本。",
+                f"原文：{text}\n违规原因：{'、'.join(violations)}\n请输出合规的改写版本，只输出文本本身。",
+                max_tokens=1000,
+            )
+            return {
+                "action": "compliance_fix",
+                "status": "success",
+                "data": {"passed": False, "fixed": True, "text": fixed_text.strip(), "violations": violations},
+                "summary": f"发现违规内容（{'、'.join(violations)}），已自动改写",
+            }
+        except Exception as e:
+            return {
+                "action": "compliance_fix",
+                "status": "success",
+                "data": {"passed": False, "fixed": False, "text": text, "violations": violations},
+                "summary": f"发现违规内容：{'、'.join(violations)}，请手动修改",
+            }
 
     async def _do_push_to_shopify(self, params: dict) -> dict:
         """发布到 Shopify"""
