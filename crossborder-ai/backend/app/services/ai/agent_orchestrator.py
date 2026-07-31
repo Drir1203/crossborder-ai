@@ -101,6 +101,12 @@ class AgentOrchestrator:
                 {"action": "generate_listing", "critical": False},
             ],
         },
+        "select_products": {
+            "name": "AI 选品决策",
+            "steps": [
+                {"action": "select_products", "critical": True, "description": "AI 推荐值得做的商品"},
+            ],
+        },
         "decision_and_list": {
             "name": "判断商品 + 生成 Listing",
             "steps": [
@@ -169,6 +175,7 @@ class AgentOrchestrator:
 - 你必须选择具体的工具来执行，不能只是回答问题
 - 如果用户没有明确说要做什么，引导用户使用工具
 - 用户提到分析/市场/能不能做/品类 → 用 analyze_category
+- 用户提到选品/推荐/做点什么/想做XX → 用 select_products
 - 用户提到商品链接 + 能不能做/值不值得 → 用 analyze_product_decision
 - 用户提到商品链接 → 用 scrape_1688
 - 用户提到生成/发布/上架 → 用 generate_listing
@@ -181,26 +188,30 @@ class AgentOrchestrator:
    参数: {"keyword": "品类关键词，如蓝牙耳机"}
    输出: 市场容量、竞争格局、利润模型、选品建议
 
-2. analyze_product_decision — 单品决策
+2. select_products — 选品推荐
+   参数: {"keyword": "品类关键词，如宠物用品"}
+   输出: 推荐值得做的商品、利润估算、切入建议
+
+3. analyze_product_decision — 单品决策
    参数: {"url": "1688商品链接"}
    输出: 能不能做、利润估算、建议定价
 
-3. scrape_1688 — 抓取1688商品
+4. scrape_1688 — 抓取1688商品
    参数: {"url": "1688商品链接"}
    输出: 商品标题、价格、图片
 
-2. create_product — 创建商品到系统
+5. create_product — 创建商品到系统
    参数: {"url": "...", "title": "...", "price": 数字}
    注意: scrape_1688 后才能拿到数据
 
-3. generate_listing — AI 生成 Listing 内容
+6. generate_listing — AI 生成 Listing 内容
    参数: {"product_id": "商品ID", "platform": "amazon/ebay/shopify/etsy/walmart", "language": "en/ja/es等"}
    注意: 需要先有商品
 
-4. compliance_check — 合规审查
+7. compliance_check — 合规审查
    参数: {"text": "要检查的文本"}
 
-5. calculate_profit — 净利计算
+8. calculate_profit — 净利计算
    参数: {"selling_price": 售价, "product_cost": 成本, "platform_fee_rate": 费率}
 
 6. answer — 【仅当其他工具都不适用时】回答用户问题
@@ -234,6 +245,8 @@ class AgentOrchestrator:
                 return await self._do_scrape(params)
             elif action == "analyze_product_decision":
                 return await self._do_analyze_product_decision(params)
+            elif action == "select_products":
+                return await self._do_select_products(params)
             elif action == "create_product":
                 return await self._do_create_product(params)
             elif action == "generate_listing":
@@ -372,6 +385,41 @@ class AgentOrchestrator:
             "data": {"title": title, "description": description, "bullet_points": bullets},
             "summary": f"已为 {platform} 生成 Listing：{title[:50]}...",
         }
+
+    async def _do_select_products(self, params: dict) -> dict:
+        """选品决策：输入品类，AI 推荐值得做的商品"""
+        from app.services.ai.deepseek import DeepSeekService
+
+        keyword = params.get("keyword") or params.get("category") or params.get("query", "")
+        if not keyword:
+            return {"action": "select_products", "status": "failed", "error": "缺少品类关键词"}
+
+        llm = DeepSeekService()
+        try:
+            # 让 AI 生成选品建议（市场分析 + 候选商品 + 利润估算）
+            report = await llm.generate(
+                "你是跨境电商选品专家。根据品类，推荐值得做的商品，给出详细分析和利润估算。",
+                f"分析品类「{keyword}」的选品机会。\n"
+                f"请输出：\n"
+                f"1. 该品类在 Amazon 的市场概况（搜索量、竞争度）\n"
+                f"2. 推荐 5 个值得做的具体商品（子品类/款式）\n"
+                f"3. 每个商品：1688 采购价估算、建议 Amazon 定价、预计利润率、竞争度评估\n"
+                f"4. 最终推荐 TOP 1 商品，说明理由\n"
+                f"5. 给新手的切入建议\n"
+                f"数据用具体数字，Markdown 格式。",
+                max_tokens=4000,
+            )
+
+            # 额外算一个简化的推荐摘要
+            summary = f"已完成「{keyword}」选品分析，推荐 5 个候选商品，含利润估算"
+            return {
+                "action": "select_products",
+                "status": "success",
+                "data": {"keyword": keyword, "report": report},
+                "summary": summary,
+            }
+        except Exception as e:
+            return {"action": "select_products", "status": "failed", "error": str(e)}
 
     async def _do_analyze_category(self, params: dict) -> dict:
         """品类分析"""
