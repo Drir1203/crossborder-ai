@@ -145,6 +145,55 @@ class DeepSeekService:
 
     # ── 业务方法（以下是针对电商场景的 prompt 模板） ──────────
 
+    async def chat_with_tools(
+        self,
+        messages: list,
+        tools: Optional[list] = None,
+        max_tokens: int = 2000,
+    ) -> dict:
+        """调用 DeepSeek Chat API，支持 Function Calling
+
+        【全栈学习者必读】
+        Function Calling 是 Agent 的核心能力：
+        模型不直接执行操作，而是返回"我要调用哪个工具、传什么参数"，
+        由代码执行工具，再把结果传回给模型继续推理。
+
+        这就是 ReAct 模式的循环：
+        思考 → 调用工具 → 观察结果 → 再思考 → ...
+
+        Args:
+            messages: 对话消息列表
+                [{"role": "system", "content": "..."},
+                 {"role": "user", "content": "..."},
+                 {"role": "tool", "content": "工具返回的结果", "tool_call_id": "..."}]
+            tools: 工具定义列表（OpenAI 格式）
+            max_tokens: 最大生成长度
+
+        Returns:
+            dict: 包含 content（文本回复）和 tool_calls（要调用的工具）
+        """
+        body = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if tools:
+            body["tools"] = tools
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._build_headers(),
+                json=body,
+            )
+            response.raise_for_status()
+            data = response.json()
+            message = data["choices"][0]["message"]
+            return {
+                "content": message.get("content", ""),
+                "tool_calls": message.get("tool_calls", []),
+            }
+
     async def generate_product_description(
         self,
         product_title: str,

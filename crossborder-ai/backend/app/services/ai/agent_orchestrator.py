@@ -31,13 +31,198 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AgentOrchestrator:
-    """AI Agent 编排器 —— 理解用户指令并自动执行"""
+    """AI Agent 编排器 —— 基于 ReAct + Function Calling 的决策 Agent"""
+
+    # ── 工具注册表（DeepSeek Function Calling 格式） ─────────
+    TOOLS = [
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_category",
+                "description": "分析一个品类在 Amazon 的市场情况",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"keyword": {"type": "string", "description": "品类关键词，如蓝牙耳机"}},
+                    "required": ["keyword"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "select_products",
+                "description": "根据品类推荐值得做的商品，含利润估算",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"keyword": {"type": "string", "description": "品类关键词，如宠物用品"}},
+                    "required": ["keyword"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_product_decision",
+                "description": "判断一个 1688 商品能不能做",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string", "description": "1688 商品链接"}},
+                    "required": ["url"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "scrape_1688",
+                "description": "抓取 1688 商品信息",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string", "description": "1688 商品链接"}},
+                    "required": ["url"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_listing",
+                "description": "为商品生成 AI Listing 文案",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "product_id": {"type": "string", "description": "商品 ID"},
+                        "platform": {"type": "string", "description": "目标平台"},
+                        "language": {"type": "string", "description": "目标语言"},
+                    },
+                    "required": ["product_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "compliance_check",
+                "description": "检查文本是否含违规内容",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string", "description": "要检查的文本"}},
+                    "required": ["text"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "compliance_fix",
+                "description": "检查文本并自动修复违规内容",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string", "description": "要检查修复的文本"}},
+                    "required": ["text"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "calculate_profit",
+                "description": "计算商品净利润",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "selling_price": {"type": "number", "description": "售价"},
+                        "product_cost": {"type": "number", "description": "成本"},
+                        "platform_fee_rate": {"type": "number", "description": "平台费率"},
+                        "shipping_cost": {"type": "number", "description": "运费"},
+                        "exchange_rate": {"type": "number", "description": "汇率"},
+                    },
+                    "required": ["selling_price", "product_cost"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "store_check",
+                "description": "巡检店铺所有商品，找出问题",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    ]
 
     def __init__(self, user: User, db: AsyncSession):
         self.llm = DeepSeekService()
         self.user = user
         self.db = db
         self.steps: list[dict] = []  # 记录执行步骤
+
+    async def run_react(self, instruction: str, max_rounds: int = 6) -> dict:
+        """ReAct 推理循环：思考 → 调用工具 → 观察 → 再思考
+
+        直到模型认为任务完成（不再调用工具），或达到最大轮数。
+        """
+        self.steps = []
+        system_prompt = (
+            "你是跨境电商 AI 决策助手。你可以调用工具来完成任务。\n"
+            "规则：\n"
+            "1. 如果需要数据分析、选品、抓取、生成等操作，调用相应工具\n"
+            "2. 每次调用工具后，根据结果决定下一步\n"
+            "3. 任务完成后，用自然语言总结结果给用户\n"
+            "4. 不要编造工具没返回的数据"
+        )
+
+        # 对话历史
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": instruction},
+        ]
+
+        for round_num in range(max_rounds):
+            # 让模型思考并决定是否调用工具
+            response = await self.llm.chat_with_tools(messages, tools=self.TOOLS)
+            tool_calls = response.get("tool_calls", [])
+
+            # 没有工具调用 → 模型认为任务完成，返回最终回答
+            if not tool_calls:
+                final_answer = response.get("content", "已完成")
+                return {
+                    "summary": final_answer,
+                    "status": "success",
+                    "steps": self.steps,
+                }
+
+            # 有工具调用 → 逐个执行
+            messages.append({
+                "role": "assistant",
+                "content": response.get("content", ""),
+                "tool_calls": tool_calls,
+            })
+
+            for tc in tool_calls:
+                func_name = tc["function"]["name"]
+                try:
+                    func_args = json.loads(tc["function"]["arguments"])
+                except (json.JSONDecodeError, KeyError):
+                    func_args = {}
+
+                # 执行工具
+                result = await self._execute_step(func_name, func_args)
+                self.steps.append(result)
+
+                # 把工具结果返回给模型
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", str(round_num)),
+                    "content": json.dumps(result, ensure_ascii=False, default=str)[:2000],
+                })
+
+        # 达到最大轮数
+        return {
+            "summary": "处理步骤较多，以下是已完成的步骤",
+            "status": "success",
+            "steps": self.steps,
+        }
 
     async def run(self, instruction: str) -> dict:
         """执行用户指令
@@ -53,7 +238,12 @@ class AgentOrchestrator:
                 "status": "success" | "partial" | "failed"
             }
         """
-        # ── 第1步：用 LLM 解析指令，生成执行计划 ──────────
+        # ── ReAct 推理循环：模型自己决定调用哪些工具 ────────
+        result = await self.run_react(instruction)
+        if result["status"] == "success":
+            return result
+
+        # ── 降级：如果 ReAct 失败，退回 Plan-and-Execute ──
         plan = await self._create_plan(instruction)
         self.steps = []
 
@@ -63,7 +253,6 @@ class AgentOrchestrator:
             step_result = await self._execute_step(action, params)
             self.steps.append(step_result)
 
-            # 如果某一步失败了，看后面的步骤是否依赖它
             if step_result["status"] == "failed" and step.get("critical", False):
                 break
 

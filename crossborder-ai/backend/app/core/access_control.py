@@ -20,6 +20,7 @@ FEATURE_ACCESS: dict[str, list[str]] = {
 # ── 白名单（测试账号邮箱，不受限制） ──────────────────────────
 WHITELIST_EMAILS: set[str] = {
     "admin@veyaship.com",  # 平台管理员
+    "test@veyaship.com",   # 测试账号
 }
 
 
