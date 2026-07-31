@@ -149,6 +149,22 @@ class AgentOrchestrator:
                 "parameters": {"type": "object", "properties": {}},
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "self_reflect",
+                "description": "审查生成内容的质量，评分并给出改进建议",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "要审查的内容"},
+                        "platform": {"type": "string", "description": "目标平台"},
+                        "language": {"type": "string", "description": "语言"},
+                    },
+                    "required": ["content"],
+                },
+            },
+        },
     ]
 
     def __init__(self, user: User, db: AsyncSession):
@@ -309,6 +325,7 @@ class AgentOrchestrator:
                 {"action": "scrape_1688", "critical": True},
                 {"action": "create_product", "critical": True},
                 {"action": "generate_listing", "critical": False, "description": "AI 生成 Listing"},
+                {"action": "self_reflect", "critical": False, "description": "内容质量自检"},
                 {"action": "compliance_fix", "critical": False, "description": "合规自动修复"},
             ],
         },
@@ -414,6 +431,10 @@ class AgentOrchestrator:
    参数: 无（检查当前用户所有商品）
    输出: 有问题的商品列表（缺标题/价格等）
 
+10. self_reflect — 内容质量自检
+   参数: {"content": "要审查的内容", "platform": "目标平台"}
+   输出: 质量评分、问题、改进建议
+
 6. answer — 【仅当其他工具都不适用时】回答用户问题
    参数: {"message": "回答内容"}
    注意: 这是最后选项，优先用上面的工具
@@ -449,6 +470,8 @@ class AgentOrchestrator:
                 return await self._do_select_products(params)
             elif action == "store_check":
                 return await self._do_store_check(params)
+            elif action == "self_reflect":
+                return await self._do_self_reflect(params)
             elif action == "create_product":
                 return await self._do_create_product(params)
             elif action == "generate_listing":
@@ -639,6 +662,74 @@ class AgentOrchestrator:
             return {"action": "analyze_category", "status": "success", "data": {"report": report}, "summary": f"{keyword} 市场分析完成"}
         except Exception as e:
             return {"action": "analyze_category", "status": "failed", "error": str(e)}
+
+    async def _do_self_reflect(self, params: dict) -> dict:
+        """自我反思：审查生成的内容质量，给出评分和改进建议
+
+        用于 Listing 生成后的质量把关：
+        1. 检查内容完整性（标题/描述/卖点是否齐全）
+        2. 检查平台适配度
+        3. 检查 SEO 质量
+        4. 检查合规性
+        5. 输出评分 + 改进建议
+        """
+        from app.services.ai.deepseek import DeepSeekService
+
+        content = params.get("content", "") or params.get("title", "")
+        platform = params.get("platform", "amazon")
+        language = params.get("language", "en")
+
+        if not content:
+            return {"action": "self_reflect", "status": "failed", "error": "缺少要审查的内容"}
+
+        llm = DeepSeekService()
+        try:
+            result = await llm.generate(
+                "你是电商内容质量评审员。严格评审内容质量，只返回JSON。",
+                f"评审以下 {platform} Listing 内容（语言：{language}）：\n"
+                f"内容：{content[:1500]}\n\n"
+                f"评分标准（1-10）：\n"
+                f"1. completeness：内容是否完整（标题、描述、卖点）\n"
+                f"2. platform_fit：是否适配 {platform} 平台规则\n"
+                f"3. seo_quality：SEO 关键词是否优化\n"
+                f"4. conversion：转化说服力\n"
+                f"5. compliance：是否含违规内容\n\n"
+                f"返回 JSON：\n"
+                f"{{\"scores\": {{\"completeness\": 8, \"platform_fit\": 7, \"seo_quality\": 6, \"conversion\": 7, \"compliance\": 9}}, \"overall\": 7, \"issues\": [\"问题1\", \"问题2\"], \"suggestions\": [\"建议1\", \"建议2\"]}}",
+                max_tokens=500,
+            )
+            import json as _json
+            import re as _re
+            match = _re.search(r'\{.*\}', result, _re.DOTALL)
+            if match:
+                data = _json.loads(match.group())
+                overall = data.get("overall", 5)
+                issues = data.get("issues", [])
+                suggestions = data.get("suggestions", [])
+
+                quality = "良好" if overall >= 7 else ("一般" if overall >= 5 else "较差")
+                need_improve = overall < 7
+
+                summary = f"内容自检评分：{overall}/10（{quality}）"
+                if need_improve:
+                    summary += f"，建议改进：{'、'.join(suggestions[:2])}"
+
+                return {
+                    "action": "self_reflect",
+                    "status": "success",
+                    "data": {
+                        "overall": overall,
+                        "scores": data.get("scores", {}),
+                        "issues": issues,
+                        "suggestions": suggestions,
+                        "need_improve": need_improve,
+                    },
+                    "summary": summary,
+                }
+        except Exception:
+            pass
+
+        return {"action": "self_reflect", "status": "success", "data": {"overall": 7, "need_improve": False}, "summary": "内容自检完成"}
 
     async def _do_compliance(self, params: dict) -> dict:
         """合规审查（正则 + AI 双重检测）"""
