@@ -30,36 +30,19 @@ apiClient.interceptors.request.use(
 // --- Response Interceptor: Error Handling & Token Refresh ---
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError<ApiError>) => {
+  (error: AxiosError<ApiError>) => {
     const originalRequest = error.config
 
-    // Handle 401: try token refresh
+    // 401 处理：
+    // 1. 登录/注册接口的 401 是"密码错误"等正常业务错误，必须放行给表单显示，
+    //    不能劫持成页面跳转（否则用户看不到"邮箱或密码错误"）。
+    // 2. 其余接口 401 = 会话失效，清除本地会话并回登录页。
     if (error.response?.status === 401 && originalRequest) {
-      const refreshToken = localStorage.getItem('refresh_token')
+      const url = originalRequest.url || ''
+      const isAuthEndpoint =
+        url.includes('/auth/login') || url.includes('/auth/register')
 
-      if (refreshToken && !originalRequest._retry) {
-        originalRequest._retry = true
-
-        try {
-          const response = await axios.post(`${API_BASE}/auth/refresh`, {
-            refresh_token: refreshToken,
-          })
-
-          const { access_token, refresh_token: newRefreshToken } = response.data
-          localStorage.setItem('access_token', access_token)
-          localStorage.setItem('refresh_token', newRefreshToken)
-
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${access_token}`
-          }
-          return apiClient(originalRequest)
-        } catch {
-          // Refresh failed: clear auth
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
-          window.location.href = '/login'
-        }
-      } else {
+      if (!isAuthEndpoint) {
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         window.location.href = '/login'
