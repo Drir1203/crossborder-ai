@@ -122,6 +122,15 @@ crossborder-ai/
 
 ---
 
+## 最近进展（2026-08）
+
+- **整店巡检闭环**：定时巡检 + 手动巡检 + 看板展示
+- **ReAct + Function Calling Agent** + **Self-reflection agent 4.2**（`backend/app/services/ai/`）
+- **Store health check closed loop**：店铺健康检查闭环
+- **登录/注册 401 修复**、**前端构建改 vite build**、**GitHub Actions deploy.yml 部署**
+
+> 与 i面试 共享阿里云服务器，nginx 路径隔离：crossborder 用 `/`、`/api/`，i面试 用 `/interview/`。改 nginx 前必须确认不劫持对方路径。
+
 ## 关键规则
 
 1. **不要提 `.env`、`backend/`、API Key 给终端用户看** — 用户是跨境卖家，不是开发者
