@@ -3,8 +3,8 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
 import {
-  Sparkles, Globe, ShoppingBag, Bot, DollarSign, Shield, ArrowRight, CheckCircle2,
-  Languages, Zap,
+  Sparkles, Globe, ShoppingBag, Bot, DollarSign, ShieldCheck, TrendingUp,
+  ArrowRight, CheckCircle2, Zap,
 } from 'lucide-react'
 
 const container = {
@@ -17,12 +17,12 @@ const item = {
 }
 
 const FEATURES = [
-  { icon: Bot, title: 'AI 选品决策', desc: '告诉 AI "我想做蓝牙耳机"，自动分析 Amazon 市场容量、竞争格局、利润空间，给出能不能做的判断。' },
-  { icon: DollarSign, title: '利润自动计算', desc: 'AI 自动从 1688 获取供货价，结合平台费率运费广告成本，算出真实净利润和利润率。' },
-  { icon: Zap, title: 'AI 生成 Listing', desc: '确定要卖的商品后，AI 自动生成适配 Amazon/Shopify/eBay 的标题、描述、卖点和 SEO。' },
-  { icon: Languages, title: '多语言翻译 + 对照', desc: '支持英日韩法德等 16 种语言，原文译文对照显示，质量可查验，适合多站点运营。' },
-  { icon: Shield, title: '合规审查', desc: '正则 + AI 双重检测违禁词和平台违规风险，避免下架罚款，降低运营风险。' },
-  { icon: ShoppingBag, title: 'Shopify 一键发布', desc: 'AI 生成内容后直接发布到绑定的 Shopify 店铺。自有商品支持 CSV 批量导入批量处理。' },
+  { icon: Bot, title: 'AI 智能助手', desc: '说一句话就能干活："帮我选蓝牙耳机的品""检查一下我的店铺"。AI 自动拆解任务、调用工具、多步执行、生成结果。' },
+  { icon: TrendingUp, title: 'AI 选品决策', desc: '告诉 AI 你想做的品类，自动分析 Amazon 市场容量、竞争格局、利润空间，判断这个品到底能不能做。' },
+  { icon: DollarSign, title: '利润自动计算', desc: 'AI 自动获取 1688 供货价，结合平台费率、运费、广告成本，算出真实净利润和利润率。' },
+  { icon: Zap, title: 'AI 生成 Listing', desc: '确定商品后自动生成 Amazon / Shopify 的标题、描述、卖点、SEO，多语言翻译对照可查验。' },
+  { icon: ShieldCheck, title: '整店巡检', desc: '每天凌晨自动检查店铺所有商品，标记缺标题、缺价格、缺链接的问题，自动生成待办清单。' },
+  { icon: ShoppingBag, title: 'Shopify 一键发布', desc: 'AI 生成内容后直接发布到绑定的 Shopify 店铺，支持 1688 → Shopify / Amazon 全自动上架。' },
 ]
 
 const PLATFORMS = ['Amazon', 'Shopify', 'eBay', 'Etsy', 'Temu', 'TikTok Shop', 'Walmart', 'AliExpress']
@@ -69,7 +69,7 @@ export default function LandingPage() {
 
               <motion.div variants={item}>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3.5 py-1 text-xs font-medium text-indigo-600">
-                  <Sparkles className="h-3 w-3" /> 跨境电商 AI 工具
+                  <Sparkles className="h-3 w-3" /> 跨境电商 AI 决策引擎 · AI Agent 自动化
                 </span>
               </motion.div>
 
@@ -82,9 +82,9 @@ export default function LandingPage() {
                   </span>
                 </h1>
                 <p className="text-sm sm:text-base text-slate-500 max-w-lg mx-auto leading-relaxed">
-                  输入品类名，AI 自动分析 Amazon 市场容量、竞争格局、利润空间。
+                  说一句话，AI Agent 帮你从选品到上架一条龙完成：
                   <br />
-                  从选品决策到 Listing 生成再到上架，一个平台完成。
+                  选品分析 → 生成 Listing → 合规检查 → 一键发布，每天自动巡检你的店铺。
                 </p>
               </motion.div>
 
@@ -146,6 +146,30 @@ export default function LandingPage() {
                 </div>
                 <h3 className="font-medium text-sm text-slate-800 mb-1">{f.title}</h3>
                 <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── AI 智能助手 ──────────────────────────────────── */}
+        <section className="max-w-5xl mx-auto px-4 py-16">
+          <h2 className="text-lg font-semibold text-center text-slate-800 mb-1">AI 智能助手，说一句话就干活</h2>
+          <p className="text-sm text-slate-500 text-center mb-8">不用记操作步骤，像跟同事说话一样，AI 自动完成整个流程</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            {[
+              { prompt: '"我想做蓝牙耳机，帮我选品"', steps: 'AI 分析市场 → 推荐值得做的商品 → 算利润 → 生成 Listing' },
+              { prompt: '"把这款 1688 商品上架到 Shopify"', steps: '抓取商品 → 翻译 → 生成 Listing → 合规检查 → 一键发布' },
+              { prompt: '"检查一下我的店铺"', steps: '整店巡检 → 找出缺信息的问题商品 → 生成待办清单' },
+            ].map((c, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }}
+                className="rounded-xl bg-slate-50 border border-slate-200 p-5">
+                <div className="flex items-start gap-2">
+                  <Bot className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{c.prompt}</p>
+                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">{c.steps}</p>
+                  </div>
+                </div>
               </motion.div>
             ))}
           </div>
