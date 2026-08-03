@@ -5,11 +5,12 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.rate_limit import RateLimit
 from app.dependencies import get_current_user
 from app.models.product import Product
 from app.models.user import User
@@ -102,6 +103,100 @@ async def analyze_category(
         max_tokens=4000,
     )
     return {"category": keyword, "report": report, "market": "Amazon US"}
+
+
+@router.get("/store-check-history")
+async def get_store_check_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户的整店巡检历史记录"""
+    from app.models.store_check_log import StoreCheckLog
+    import json
+
+    result = await db.execute(
+        select(StoreCheckLog)
+        .where(StoreCheckLog.user_id == current_user.id)
+        .order_by(StoreCheckLog.created_at.desc())
+        .limit(20)
+    )
+    logs = result.scalars().all()
+
+    return {
+        "items": [
+            {
+                "id": str(l.id),
+                "total": l.total,
+                "healthy": l.healthy,
+                "issue_count": l.issue_count,
+                "issues": json.loads(l.issues_json) if l.issues_json else [],
+                "created_at": str(l.created_at),
+            }
+            for l in logs
+        ]
+    }
+
+
+@router.post("/store-check")
+async def run_store_check(
+    request: Request,
+    _ratelimit=Depends(RateLimit("ai_generate")),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """手动触发整店巡检：检查当前用户所有商品，记录结果"""
+    from app.models.store_check_log import StoreCheckLog
+    import json
+
+    if current_user.credits < 1:
+        raise HTTPException(status_code=402, detail="积分不足")
+
+    # 查询该用户所有商品
+    result = await db.execute(
+        select(Product).where(Product.user_id == current_user.id)
+    )
+    products = result.scalars().all()
+
+    issues = []
+    healthy = 0
+    for p in products:
+        product_issues = []
+        if not p.title:
+            product_issues.append("缺标题")
+        if not p.price:
+            product_issues.append("缺价格")
+        if not p.url:
+            product_issues.append("缺链接")
+        if product_issues:
+            issues.append({
+                "id": str(p.id),
+                "title": p.title or "未命名商品",
+                "issues": product_issues,
+            })
+        else:
+            healthy += 1
+
+    total = len(products)
+    issue_count = len(issues)
+
+    # 保存巡检记录（与定时巡检共用同一张表，方便看历史）
+    db.add(StoreCheckLog(
+        user_id=current_user.id,
+        total=total,
+        healthy=healthy,
+        issue_count=issue_count,
+        issues_json=json.dumps(issues, ensure_ascii=False) if issues else None,
+    ))
+
+    await current_user.deduct_credits(db, 1)
+
+    return {
+        "total": total,
+        "healthy": healthy,
+        "issue_count": issue_count,
+        "issues": issues,
+        "summary": f"巡检完成：共 {total} 个商品，{issue_count} 个有问题，{healthy} 个正常",
+    }
 
 
 @router.get("/insights")

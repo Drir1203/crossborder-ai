@@ -9,7 +9,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Integer, String, func, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -50,6 +50,13 @@ class User(Base):
     credits: Mapped[int] = mapped_column(Integer, default=30)
     # plan（套餐）控制可用功能范围，free / standard / professional
     plan: Mapped[str] = mapped_column(String(50), default="free")
+
+    # ── 关联 ────────────────────────────────────────────────
+    # payment.py 的 Subscription 声明了 back_populates="subscriptions"
+    # 这里补对称关系，否则 SQLAlchemy mapper 配置会失败
+    subscriptions = relationship(
+        "Subscription", back_populates="user", cascade="all, delete-orphan"
+    )
 
     # ── 时间戳 ──────────────────────────────────────────────
     # server_default=func.now() 由数据库自动填当前时间，不是 Python 填的

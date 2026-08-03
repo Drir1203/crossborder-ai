@@ -66,13 +66,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 启动时检查密钥是否已配置
     if not settings.SECRET_KEY:
-        print("[VeyaShip] ⚠️  SECRET_KEY 未设置！请在 .env 中配置")
+        print("[VeyaShip] WARNING: SECRET_KEY 未设置！请在 .env 中配置")
     if not settings.JWT_SECRET_KEY:
-        print("[VeyaShip] ⚠️  JWT_SECRET_KEY 未设置！请在 .env 中配置")
+        print("[VeyaShip] WARNING: JWT_SECRET_KEY 未设置！请在 .env 中配置")
 
     await init_db()
     print(f"[VeyaShip] Database ready ({'SQLite' if settings.USE_SQLITE else 'PostgreSQL'})")
+
+    # 启动定时任务
+    from app.services.scheduler import SchedulerService
+    scheduler = SchedulerService()
+    try:
+        await scheduler.start()
+    except Exception as e:
+        print(f"[VeyaShip] WARNING: Scheduler 启动失败：{e}")
+
     yield
+    try:
+        await scheduler.stop()
+    except Exception:
+        pass
     print("[VeyaShip] shutting down...")
 
 

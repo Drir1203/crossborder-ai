@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
@@ -20,6 +20,8 @@ import {
   CalendarDays,
   MessageSquareText,
   Sparkles,
+  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,6 +53,7 @@ export default function DashboardPage() {
   const { user } = useAuthStore()
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [input, setInput] = useState('')
   const [showAgentResult, setShowAgentResult] = useState(false)
 
@@ -263,6 +266,9 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* ── 整店巡检（5.0 定时 Agent） ─────────────────────── */}
+      <StoreCheckSection timeAgo={timeAgo} />
+
       {/* ── AI 输入框（快捷指令） ──────────────────────────── */}
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="p-4">
@@ -335,6 +341,185 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/**
+ * StoreCheckSection - 整店巡检（5.0 定时 Agent）
+ *
+ * 展示每日自动巡检 + 手动巡检的结果：
+ * 最近一次巡检的健康状态、问题商品列表、历史记录。
+ */
+interface StoreCheckIssue {
+  id: string
+  title: string
+  issues: string[]
+}
+interface StoreCheckLogItem {
+  id: string
+  total: number
+  healthy: number
+  issue_count: number
+  issues: StoreCheckIssue[]
+  created_at: string
+}
+
+function StoreCheckSection({ timeAgo }: { timeAgo: (d: string) => string }) {
+  const queryClient = useQueryClient()
+  const [runError, setRunError] = useState('')
+
+  // 巡检历史
+  const { data, isLoading } = useQuery<{ items: StoreCheckLogItem[] }>({
+    queryKey: ['store-check-history'],
+    queryFn: async () => {
+      const res = await apiClient.get('/analytics/store-check-history')
+      return res.data
+    },
+  })
+
+  // 立即巡检（手动触发，扣 1 积分，写一条巡检记录）
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post('/analytics/store-check')
+      return res.data
+    },
+    onSuccess: () => {
+      setRunError('')
+      queryClient.invalidateQueries({ queryKey: ['store-check-history'] })
+    },
+    onError: (err: any) => {
+      setRunError(err?.response?.data?.detail || '巡检失败，请稍后重试')
+    },
+  })
+
+  const items = data?.items ?? []
+  const latest = items[0]
+
+  return (
+    <Card className="border-emerald-500/20">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-500" />
+            整店巡检
+          </CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending || isLoading}
+          >
+            {mutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            立即巡检
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          每天凌晨自动检查商品健康状态，也可手动触发
+        </p>
+      </CardHeader>
+      <CardContent>
+        {runError && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {runError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            <ShieldCheck className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
+            还没有巡检记录
+            <p className="text-xs mt-1">点击「立即巡检」，马上检查商品健康状态</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* 最近一次巡检 */}
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  最近巡检 · {timeAgo(latest.created_at)}
+                </span>
+                {latest.issue_count > 0 ? (
+                  <Badge variant="warning">需处理 {latest.issue_count}</Badge>
+                ) : (
+                  <Badge variant="success">全部正常</Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-lg font-bold">{latest.total}</p>
+                  <p className="text-[11px] text-muted-foreground">商品总数</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-emerald-600">{latest.healthy}</p>
+                  <p className="text-[11px] text-muted-foreground">正常</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-amber-600">{latest.issue_count}</p>
+                  <p className="text-[11px] text-muted-foreground">需处理</p>
+                </div>
+              </div>
+
+              {/* 问题商品列表 */}
+              {latest.issue_count > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {latest.issues.map((issue) => (
+                    <div
+                      key={issue.id}
+                      className="flex items-start justify-between gap-2 text-xs rounded-md bg-background px-2 py-1.5"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        <span className="truncate">{issue.title}</span>
+                      </div>
+                      <span className="text-muted-foreground shrink-0">
+                        {issue.issues.join('、')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 历史记录 */}
+            {items.length > 1 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">历史记录</p>
+                <div className="space-y-1">
+                  {items.slice(1, 6).map((log) => (
+                    <div
+                      key={log.id}
+                      className="flex items-center justify-between text-xs px-2 py-1.5 rounded-md hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-2">
+                        {log.issue_count > 0 ? (
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                        )}
+                        <span className="text-muted-foreground">{timeAgo(log.created_at)}</span>
+                      </div>
+                      <span className="text-muted-foreground">
+                        {log.total} 个 · 正常 {log.healthy} · 需处理 {log.issue_count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
