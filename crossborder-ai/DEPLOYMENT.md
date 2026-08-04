@@ -35,7 +35,7 @@
 - **后端**：Python FastAPI + SQLAlchemy 2.0 异步，uvicorn 4 个 worker 进程
 - **数据库**：PostgreSQL 16（服务器原生安装，systemd 管理）
 - **Web 层**：Nginx 统一入口 —— SSL 证书终止、静态资源托管、`/api` 反向代理到后端
-- **AI 服务**：DeepSeek（文本）、Replicate（图片）、阿里云通义万相 —— 均为外部 API，后端作为聚合层
+- **AI 服务**：DeepSeek（文本）、阿里云通义万相（图片，Replicate FLUX 降级）—— 均为外部 API，后端作为聚合层
 
 ---
 

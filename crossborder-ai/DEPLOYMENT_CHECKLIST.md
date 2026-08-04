@@ -14,7 +14,7 @@
 
 ```
 👤 1. 买个服务器 + 把域名指向它（~10 分钟）
-👤 2. 注册 DeepSeek + Replicate 拿到 API Key（~5 分钟）
+👤 2. 注册 DeepSeek + 阿里云通义万相拿到 API Key（~5 分钟）
 🤖 3. 运行我给你的 3 条命令（~3 分钟）
 ```
 
@@ -47,7 +47,8 @@
 | 步骤 | 自动化 | 说明 |
 |------|--------|------|
 | DeepSeek API Key | 👤 **手动** | https://platform.deepseek.com/api_keys |
-| Replicate API Key | 👤 **手动** | https://replicate.com/account/api-tokens |
+| 阿里云通义万相 API Key | 👤 **手动** | https://dashscope.console.aliyun.com/api-key |
+| Replicate API Key（可选降级） | 👤 **手动** | https://replicate.com/account/api-tokens |
 
 **我能做什么**：🤖 你拿到 Key 后告诉我，我帮你填到配置文件里。
 
@@ -146,7 +147,7 @@ sudo ./deploy.sh
 | 1 | **买服务器** | 5 分钟 | 选 DigitalOcean / 阿里云 / Vultr |
 | 2 | **域名 DNS 解析** | 5 分钟 | A 记录指向服务器 IP |
 | 3 | **注册 DeepSeek** | 3 分钟 | https://platform.deepseek.com |
-| 4 | **注册 Replicate** | 3 分钟 | https://replicate.com |
+| 4 | **注册阿里云通义万相** | 3 分钟 | https://dashscope.console.aliyun.com/ |
 | 5 | **SSH 连接服务器** | 2 分钟 | `ssh root@你的IP` |
 | 6 | **配置 .env 中的个人信息** | 3 分钟 | 填入 API Key + 域名 |
 | 7 | **验收测试** | 10 分钟 | 按第 9 节测试所有功能 |
@@ -205,7 +206,7 @@ sudo ./deploy.sh
 2. 登录密码 或 SSH Key：________
 3. 域名：________
 4. DeepSeek API Key：________
-5. Replicate API Key：________
+5. 阿里云通义万相 API Key：________
 ```
 
 我就可以**直接 SSH 连上服务器，把剩下所有事情自动化完成**。

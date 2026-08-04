@@ -12,7 +12,7 @@
 ## 技术栈
 
 ### 后端
-Python 3.12+ / FastAPI / SQLAlchemy 2.0 async / asyncpg / Alembic / JWT (python-jose + passlib bcrypt) / DeepSeek API / Replicate API (FLUX) / LangChain + LangGraph / Qdrant / httpx + BeautifulSoup + Playwright / APScheduler / pytest / curl_cffi
+Python 3.12+ / FastAPI / SQLAlchemy 2.0 async / asyncpg / Alembic / JWT (python-jose + passlib bcrypt) / DeepSeek API / 阿里云通义万相(DashScope) / Replicate FLUX(降级) / LangChain + LangGraph / Qdrant / httpx + BeautifulSoup + Playwright / APScheduler / pytest / curl_cffi
 
 ### 前端
 React 18 + TypeScript + Vite 5 + Tailwind CSS 3.4 + Shadcn/ui + React Router v6 + Zustand + TanStack React Query + Axios + React Hook Form + Zod + Lucide React + Framer Motion + react-i18next + i18next-browser-languagedetector
@@ -52,7 +52,7 @@ crossborder-ai/
 │   │   │   └── settings.py            # GET/PUT /scraping (API Key 配置)
 │   │   ├── services/
 │   │   │   ├── scraper.py             # 1688 爬虫（Onebound API → curl_cffi → httpx）
-│   │   │   ├── ai/                    # DeepSeek, Replicate, RAG, LangGraph Agent
+│   │   │   ├── ai/                    # DeepSeek, 通义万相, Replicate 降级, RAG, LangGraph Agent
 │   │   │   └── crawler/               # 网页爬虫 + Shopify
 │   │   └── core/
 │   │       ├── config.py              # Settings 类
@@ -201,7 +201,7 @@ Database: SQLite（开发模式）/ USE_SQLITE=False 时为 PostgreSQL
 
 - [ ] Day 4: 前端商品详情页完整版
 - [ ] AI 文案生成接入 DeepSeek
-- [ ] AI 图片生成接入 Replicate FLUX
+- [x] AI 图片生成（阿里云通义万相 + FLUX 降级）
 - [ ] Shopify 集成
 - [ ] 支付系统 Creem.io
 - [ ] RAG 知识库

@@ -4,7 +4,7 @@
 跨境电商 AI SaaS 平台。面向**跨境卖家**（非技术用户），所有功能必须开箱即用，无需配置 API Key、env 文件、服务器等。
 
 ## 技术栈
-- **后端**: Python 3.12+ / FastAPI / SQLAlchemy 2.0 async / asyncpg / JWT / DeepSeek API / Replicate API / LangChain+LangGraph
+- **后端**: Python 3.12+ / FastAPI / SQLAlchemy 2.0 async / asyncpg / JWT / DeepSeek API / 阿里云通义万相(DashScope) / Replicate(降级) / LangChain+LangGraph
 - **前端**: React 18 + TypeScript + Vite 5 + Tailwind CSS 3.4 + Shadcn/ui + Zustand + TanStack React Query + react-i18next
 - **数据库**: PostgreSQL（生产）/ SQLite（开发，USE_SQLITE=true）
 - **基础设施**: Docker + docker-compose / Nginx
@@ -26,7 +26,7 @@ crossborder-ai/
 │   │   ├── schemas/              # Pydantic 请求/响应校验
 │   │   ├── routers/              # API 路由（按功能分文件）
 │   │   ├── services/             # 业务逻辑层
-│   │   │   ├── ai/               # AI 服务（DeepSeek / Replicate / RAG / Agent）
+│   │   │   ├── ai/               # AI 服务（DeepSeek / 通义万相 / Replicate 降级 / RAG / Agent）
 │   │   │   ├── crawler/          # 爬虫服务（1688 / Shopify）
 │   │   │   ├── scraper.py        # 1688 抓取核心
 │   │   │   └── ...
@@ -75,7 +75,7 @@ crossborder-ai/
 - 并发扣减用 `select_for_update()` 行级锁
 
 ### API 设计原则
-- **服务商配置**：DeepSeek / Replicate / Onebound 等 API Key 由平台配置，用户无感知
+- **服务商配置**：DeepSeek / 阿里云通义万相 / Onebound 等 API Key 由平台配置，用户无感知
 - **错误信息**：对终端用户展示中文、可理解的提示，不暴露技术细节
 - **积分系统**：每次 AI 生成 / 抓取消耗 1 积分
 
@@ -112,7 +112,7 @@ crossborder-ai/
 |------|------|------|
 | F1 Canvas | `/dashboard` | 仪表盘，中央输入框，积分显示 |
 | F2 Refinery | `/products/scrape` + `/content/generate` | 1688 抓取 + DeepSeek 文案生成 |
-| F3 Generator | `/images/generate` | FLUX 图片生成 |
+| F3 Generator | `/images/generate` | 通义万相文生图（FLUX 降级） |
 | F4 Batch | `/batch/*` | CSV 批量任务 |
 | F5 Persona | `/settings/persona` | 品牌调性配置 |
 | F6 Radar | `/radar/scrape` | 竞品分析 |
