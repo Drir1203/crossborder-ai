@@ -40,6 +40,10 @@
         <text class="menu-icon">💰</text>
         <text class="menu-label">利润计算</text>
       </view>
+      <view class="menu-item" bindtap="goStoreCheck">
+        <text class="menu-icon">🛡️</text>
+        <text class="menu-label">整店巡检</text>
+      </view>
     </view>
   </block>
 

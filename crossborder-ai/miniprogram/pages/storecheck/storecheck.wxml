@@ -1,0 +1,60 @@
+<view class="page">
+  <!-- 立即巡检 -->
+  <view class="check-header">
+    <button class="btn-primary" bindtap="onCheckNow" disabled="{{checking}}">
+      {{checking ? '巡检中...' : '立即巡检'}}
+    </button>
+    <view class="check-tip">每天凌晨 2:30 自动巡检你的店铺 · 扣 1 积分</view>
+  </view>
+
+  <!-- 最近一次巡检 -->
+  <view class="card" wx:if="{{latest}}">
+    <view class="card-title">
+      <text>最近巡检 · {{latest.time}}</text>
+      <text class="badge {{latest.issue_count > 0 ? 'badge-warn' : 'badge-ok'}}">
+        {{latest.issue_count > 0 ? '需处理 ' + latest.issue_count : '全部正常'}}
+      </text>
+    </view>
+    <view class="stats-row">
+      <view class="stat">
+        <text class="stat-num">{{latest.total}}</text>
+        <text class="stat-label">商品总数</text>
+      </view>
+      <view class="stat">
+        <text class="stat-num green">{{latest.healthy}}</text>
+        <text class="stat-label">正常</text>
+      </view>
+      <view class="stat">
+        <text class="stat-num warn">{{latest.issue_count}}</text>
+        <text class="stat-label">需处理</text>
+      </view>
+    </view>
+
+    <!-- 问题商品列表 -->
+    <view class="issue-list" wx:if="{{latest.issue_count > 0}}">
+      <view class="issue-item" wx:for="{{latest.issues}}" wx:key="id">
+        <text class="issue-title">{{item.title}}</text>
+        <view class="issue-tags">
+          <text class="issue-tag" wx:for="{{item.issues}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 历史记录 -->
+  <view class="card" wx:if="{{history.length > 1}}">
+    <view class="card-title"><text>历史记录</text></view>
+    <view class="history-item" wx:for="{{history}}" wx:key="id" wx:if="{{index > 0}}">
+      <text class="history-time">{{item.time}}</text>
+      <text class="history-detail">{{item.total}} 个 · 正常 {{item.healthy}} · 需处理 {{item.issue_count}}</text>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty" wx:if="{{!loading && !latest}}">
+    <view class="empty-title">还没有巡检记录</view>
+    <view class="empty-desc">点击上方「立即巡检」，马上检查你的商品健康状态</view>
+  </view>
+
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+</view>

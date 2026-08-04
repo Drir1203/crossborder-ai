@@ -48,4 +48,8 @@ module.exports = {
 
   // AI 助手
   agentRun: (instruction) => request('POST', '/agent/run', { instruction }),
+
+  // 整店巡检
+  getStoreCheckHistory: () => request('GET', '/analytics/store-check-history'),
+  runStoreCheck: () => request('POST', '/analytics/store-check'),
 }

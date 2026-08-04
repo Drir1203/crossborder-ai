@@ -1,0 +1,46 @@
+.page { padding: 32rpx; min-height: 100vh; background: #f8fafc; }
+.check-header { margin-bottom: 24rpx; }
+.btn-primary {
+  width: 100%; height: 88rpx; line-height: 88rpx;
+  background: #4f46e5; color: #fff; font-size: 30rpx; border-radius: 16rpx;
+}
+.btn-primary[disabled] { opacity: 0.6; }
+.btn-primary::after { border: none; }
+.check-tip { text-align: center; font-size: 24rpx; color: #94a3b8; margin-top: 12rpx; }
+
+.card { background: #fff; border-radius: 16rpx; padding: 32rpx; margin-bottom: 24rpx; }
+.card-title {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 24rpx; font-size: 28rpx; font-weight: 600; color: #1e293b;
+}
+.badge { font-size: 22rpx; padding: 4rpx 16rpx; border-radius: 999rpx; font-weight: 500; }
+.badge-ok { background: #d1fae5; color: #059669; }
+.badge-warn { background: #fef3c7; color: #b45309; }
+
+.stats-row { display: flex; text-align: center; }
+.stat { flex: 1; }
+.stat-num { display: block; font-size: 40rpx; font-weight: 700; color: #1e293b; }
+.stat-label { font-size: 24rpx; color: #94a3b8; margin-top: 4rpx; }
+.green { color: #059669; }
+.warn { color: #d97706; }
+
+.issue-list { margin-top: 24rpx; border-top: 2rpx solid #f1f5f9; padding-top: 8rpx; }
+.issue-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16rpx 0; border-bottom: 2rpx solid #f8fafc;
+}
+.issue-title { font-size: 26rpx; color: #334155; flex: 1; margin-right: 16rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-tags { display: flex; flex-shrink: 0; }
+.issue-tag {
+  font-size: 22rpx; color: #d97706; background: #fef3c7;
+  padding: 4rpx 12rpx; border-radius: 8rpx; margin-left: 8rpx;
+}
+
+.history-item { display: flex; justify-content: space-between; padding: 16rpx 0; border-bottom: 2rpx solid #f8fafc; font-size: 24rpx; color: #64748b; }
+.history-time { flex-shrink: 0; margin-right: 16rpx; }
+.history-detail { text-align: right; }
+
+.empty { text-align: center; padding: 80rpx 0; color: #94a3b8; }
+.empty-title { font-size: 30rpx; font-weight: 500; }
+.empty-desc { font-size: 24rpx; margin-top: 8rpx; }
+.loading { text-align: center; color: #94a3b8; padding: 40rpx 0; font-size: 26rpx; }

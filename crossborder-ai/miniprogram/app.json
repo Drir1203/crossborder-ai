@@ -5,7 +5,8 @@
     "pages/agent/agent",
     "pages/compliance/compliance",
     "pages/orders/orders",
-    "pages/profit/profit"
+    "pages/profit/profit",
+    "pages/storecheck/storecheck"
   ],
   "window": {
     "navigationBarTitleText": "VeyaShip AI",
