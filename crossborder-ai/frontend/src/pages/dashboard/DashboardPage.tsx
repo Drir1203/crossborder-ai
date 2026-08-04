@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/authStore'
 import apiClient from '@/api/client'
@@ -87,9 +88,9 @@ export default function DashboardPage() {
 
   // 快捷跳转
   const quickActions = [
-    { icon: TrendingUp, label: '品类分析', path: '', color: 'text-blue-500', bg: 'bg-blue-500/10', onClick: () => document.getElementById('category-input')?.focus() },
-    { icon: Bot, label: 'AI 助手', path: '/app/agent', color: 'text-blue-600', bg: 'bg-blue-600/10' },
-    { icon: ShoppingCart, label: '录入商品', path: '/app/products', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { icon: TrendingUp, label: '品类分析', path: '', color: 'text-amber-500', bg: 'bg-amber-500/10', onClick: () => document.getElementById('category-input')?.focus() },
+    { icon: Bot, label: 'AI 助手', path: '/app/agent', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    { icon: ShoppingCart, label: '录入商品', path: '/app/products', color: 'text-amber-500', bg: 'bg-amber-500/10' },
     { icon: MessageSquareText, label: '生成 Listing', path: '/app/content', color: 'text-amber-500', bg: 'bg-amber-500/10' },
   ]
 
@@ -131,8 +132,8 @@ export default function DashboardPage() {
       value: dashboard?.products?.total ?? 0,
       sub: `本月新增 ${dashboard?.products?.this_month ?? 0}`,
       icon: Package,
-      color: 'text-blue-500',
-      bg: 'bg-blue-500/10',
+      color: 'text-amber-500',
+      bg: 'bg-amber-500/10',
     },
     {
       title: '待处理',
@@ -155,8 +156,8 @@ export default function DashboardPage() {
       value: 'AI 驱动',
       sub: '输入品类名开始分析',
       icon: TrendingUp,
-      color: 'text-blue-500',
-      bg: 'bg-blue-500/10',
+      color: 'text-amber-500',
+      bg: 'bg-amber-500/10',
     },
   ]
 
@@ -197,27 +198,27 @@ export default function DashboardPage() {
       </div>
 
       {/* ── AI 品类分析 ─────────────────────────────────── */}
-      <Card className="border-blue-500/20 bg-blue-500/5">
+      <Card className="border-amber-500/20 bg-amber-500/5">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm font-medium flex items-center gap-1.5">
-                <TrendingUp className="h-4 w-4 text-blue-500" />
+                <TrendingUp className="h-4 w-4 text-amber-500" />
                 AI 品类分析
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">输入品类名，AI 自动分析市场容量、竞争格局、利润空间</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <input
+            <Input
               id="category-input"
               value={categoryInput}
               onChange={(e) => setCategoryInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
               placeholder="输入品类名，如：蓝牙耳机、瑜伽裤、智能手表..."
-              className="flex-1 h-9 rounded-lg border bg-background px-3 text-sm outline-none focus:border-blue-400"
+              className="flex-1 h-9 rounded-lg bg-black/10 dark:bg-black/20"
             />
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1 shrink-0" onClick={handleAnalyze} disabled={analyzing}>
+            <Button size="sm" className="gap-1 shrink-0" onClick={handleAnalyze} disabled={analyzing}>
               {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><TrendingUp className="h-4 w-4" />AI 分析</>}
             </Button>
           </div>
@@ -229,16 +230,16 @@ export default function DashboardPage() {
             </div>
           )}
           {report && (
-            <div className="mt-3 rounded-lg border bg-background p-3 text-xs max-h-80 overflow-y-auto leading-relaxed">
+            <div className="mt-3 rounded-lg border border-glass-border bg-glass p-3 text-xs max-h-80 overflow-y-auto leading-relaxed">
               {report.slice(0, 2500).split('\n').map((line, i) => {
                 if (!line.trim()) return <p key={i} className="my-1" />
-                if (line.startsWith('# ')) return <p key={i} className="text-sm font-bold text-slate-800 mt-3 mb-1">{line.replace('# ','')}</p>
-                if (line.startsWith('## ')) return <p key={i} className="text-sm font-semibold text-slate-700 mt-2 mb-1">{line.replace('## ','')}</p>
-                if (line.startsWith('|')) return <p key={i} className="font-mono text-[11px] text-slate-600">{line}</p>
-                if (line.match(/^\d+\./)) return <p key={i} className="ml-2 text-[11px] text-slate-600">{line}</p>
-                if (line.startsWith('-')) return <p key={i} className="ml-2 text-[11px] text-slate-600">{line}</p>
-                if (line.includes('**')) return <p key={i} className="text-[11px] text-slate-700"><strong>{line.replace(/\*\*/g,'')}</strong></p>
-                return <p key={i} className="text-[11px] text-slate-600">{line}</p>
+                if (line.startsWith('# ')) return <p key={i} className="text-sm font-bold text-foreground mt-3 mb-1">{line.replace('# ','')}</p>
+                if (line.startsWith('## ')) return <p key={i} className="text-sm font-semibold text-foreground mt-2 mb-1">{line.replace('## ','')}</p>
+                if (line.startsWith('|')) return <p key={i} className="font-mono text-[11px] text-muted-foreground">{line}</p>
+                if (line.match(/^\d+\./)) return <p key={i} className="ml-2 text-[11px] text-muted-foreground">{line}</p>
+                if (line.startsWith('-')) return <p key={i} className="ml-2 text-[11px] text-muted-foreground">{line}</p>
+                if (line.includes('**')) return <p key={i} className="text-[11px] text-foreground"><strong>{line.replace(/\*\*/g,'')}</strong></p>
+                return <p key={i} className="text-[11px] text-muted-foreground">{line}</p>
               })}
               {report.length > 2500 && <p className="text-muted-foreground mt-2 text-[11px]">...报告较长，已截取前 2500 字</p>}
             </div>
@@ -273,12 +274,12 @@ export default function DashboardPage() {
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="p-4">
           <div className="flex gap-2">
-            <input
+            <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               placeholder={'粘贴商品链接，或说「帮我算利润」...'}
-              className="flex-1 h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary/40"
+              className="flex-1 h-10 rounded-lg bg-black/10 dark:bg-black/20"
             />
             <Button onClick={handleSubmit} disabled={!input.trim() || agentMutation.isPending} className="h-10 px-4">
               {agentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
