@@ -22,7 +22,7 @@ import apiClient from '@/api/client'
 
 const PLATFORMS = [
   { id: 'amazon', label: 'Amazon', color: 'bg-amber-500/10 text-amber-600' },
-  { id: 'ebay', label: 'eBay', color: 'bg-blue-500/10 text-blue-600' },
+  { id: 'ebay', label: 'eBay', color: 'bg-amber-500/10 text-amber-500' },
   { id: 'shopify', label: 'Shopify', color: 'bg-emerald-500/10 text-emerald-600' },
   { id: 'etsy', label: 'Etsy', color: 'bg-orange-500/10 text-orange-600' },
   { id: 'shein', label: 'SHEIN', color: 'bg-green-600/10 text-green-600' },
@@ -31,7 +31,7 @@ const PLATFORMS = [
   { id: 'aliexpress', label: 'AliExpress', color: 'bg-rose-500/10 text-rose-600' },
   { id: 'walmart', label: 'Walmart', color: 'bg-sky-500/10 text-sky-600' },
   { id: 'shopee', label: 'Shopee', color: 'bg-orange-600/10 text-orange-600' },
-  { id: 'lazada', label: 'Lazada', color: 'bg-blue-500/10 text-blue-600' },
+  { id: 'lazada', label: 'Lazada', color: 'bg-amber-500/10 text-amber-500' },
 ]
 
 export default function ProductDetailPage() {

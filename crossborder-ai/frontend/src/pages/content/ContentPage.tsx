@@ -415,9 +415,9 @@ export default function ContentPage() {
 
               {/* 原文对照 */}
               {selected && language !== 'zh' && (
-                <Card className="border-blue-500/20 bg-blue-500/5">
+                <Card className="border-amber-500/20 bg-amber-500/5">
                   <CardHeader>
-                    <CardTitle className="text-sm flex items-center gap-2 text-blue-600">
+                    <CardTitle className="text-sm flex items-center gap-2 text-amber-500">
                       <Globe className="h-4 w-4" />
                       原文 vs 译文对照
                     </CardTitle>

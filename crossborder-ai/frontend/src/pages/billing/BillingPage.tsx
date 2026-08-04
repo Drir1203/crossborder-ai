@@ -72,7 +72,7 @@ export default function BillingPage() {
           return (
             <Card key={plan.id} className={`relative ${plan.recommended ? 'border-blue-500 shadow-md' : ''} ${isCurrent ? 'border-emerald-400' : ''}`}>
               {plan.recommended && !isCurrent && (
-                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">推荐</div>
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">推荐</div>
               )}
               {isCurrent && (
                 <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">当前套餐</div>
