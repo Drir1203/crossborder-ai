@@ -52,6 +52,13 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // 玻璃拟态（v2）
+        glass: {
+          DEFAULT: 'var(--glass-bg)',
+          strong: 'var(--glass-bg-strong)',
+          border: 'var(--glass-border)',
+          highlight: 'var(--glass-highlight)',
+        },
         // Brand colors
         brand: {
           50: '#eef2ff',

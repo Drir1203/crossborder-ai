@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VeyaShip 高级主题预览 v2</title>
+<style>
+  :root {
+    --bg: #08080a;
+    --glass: rgba(255,255,255,0.045);
+    --glass-border: rgba(255,255,255,0.10);
+    --glass-highlight: rgba(255,255,255,0.12);
+    --txt: #f5f1e8;
+    --txt-dim: rgba(245,241,232,0.55);
+    --gold: #f59e0b;
+    --gold-deep: #b45309;
+    --amber: #fbbf24;
+    --ember: #d97706;
+    --radius: 18px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+    background: var(--bg);
+    color: var(--txt);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    padding: 48px 24px;
+    overflow-x: hidden;
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 背景 aurora 光晕（不是纯色，这是高级感第一层） ── */
+  .aurora {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  }
+  .aurora::before, .aurora::after {
+    content: ''; position: absolute; width: 70vmax; height: 70vmax;
+    border-radius: 50%; filter: blur(120px); opacity: .35;
+    animation: aurora-drift 18s ease-in-out infinite alternate;
+  }
+  .aurora::before {
+    background: radial-gradient(circle at 30% 30%, var(--ember), transparent 60%);
+    top: -30vmax; left: -20vmax;
+  }
+  .aurora::after {
+    background: radial-gradient(circle at 60% 40%, var(--gold), transparent 55%);
+    bottom: -35vmax; right: -25vmax;
+    animation-delay: -9s;
+  }
+  @keyframes aurora-drift {
+    0%   { transform: translate(0,0) scale(1); }
+    100% { transform: translate(6vmax,-4vmax) scale(1.15); }
+  }
+
+  /* ── 3D 漂浮光球（伪 3D：blur 球 + rotateX/Y + 视差浮动） ── */
+  .orb {
+    position: fixed; border-radius: 50%; z-index: 0; pointer-events: none;
+    filter: blur(2px);
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  .orb::after {
+    content:''; position:absolute; inset:0; border-radius:50%;
+    background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 55%);
+    opacity:.5; /* 高光，让球有玻璃立体感 */
+  }
+  .orb-1 {
+    width: 220px; height: 220px; top: 12%; left: 8%;
+    background: radial-gradient(circle at 35% 30%, #fcd34d, var(--gold) 45%, var(--ember) 80%);
+    animation: orb-float 9s ease-in-out infinite;
+  }
+  .orb-2 {
+    width: 140px; height: 140px; bottom: 16%; left: 22%;
+    background: radial-gradient(circle at 35% 30%, #fef3c7, var(--amber) 40%, #b45309 75%);
+    animation: orb-float 12s ease-in-out infinite -4s;
+  }
+  .orb-3 {
+    width: 90px; height: 90px; top: 22%; right: 18%;
+    background: radial-gradient(circle at 35% 30%, #fde68a, var(--gold) 50%, var(--ember) 85%);
+    animation: orb-float 7s ease-in-out infinite -2s;
+  }
+  @keyframes orb-float {
+    0%   { transform: translateY(0)  rotateX(18deg) rotateY(-18deg); }
+    50%  { transform: translateY(-32px) rotateX(8deg) rotateY(18deg); }
+    100% { transform: translateY(0)  rotateX(18deg) rotateY(-18deg); }
+  }
+
+  /* ── 手机壳（对照参考图比例） ── */
+  .phone {
+    position: relative; z-index: 1;
+    width: 390px; height: 844px;
+    border-radius: 54px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: linear-gradient(180deg, rgba(20,18,14,0.9), rgba(10,9,8,0.96));
+    box-shadow:
+      0 60px 120px -40px rgba(0,0,0,.9),
+      0 0 80px -20px rgba(245,158,11,.15),
+      inset 0 0 0 1px rgba(255,255,255,0.03);
+    backdrop-filter: blur(20px);
+    overflow: hidden;
+    padding: 26px 20px;
+    display: flex; flex-direction: column;
+  }
+  .notch {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 28px; border-radius: 20px; background: #000;
+  }
+
+  /* ── 顶栏 ── */
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding-top: 10px; }
+  .brand {
+    display:flex; align-items:center; gap:10px;
+  }
+  .brand-logo {
+    width: 34px; height: 34px; border-radius: 11px;
+    background: linear-gradient(135deg, var(--amber), var(--ember));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:15px; color:#1a1204;
+    box-shadow: 0 8px 24px -8px rgba(245,158,11,.8);
+  }
+  .brand-name { font-weight:700; font-size:15px; letter-spacing:.2px; }
+  .chip {
+    font-size:11px; color: var(--txt-dim);
+    border:1px solid var(--glass-border);
+    background: var(--glass);
+    padding:6px 12px; border-radius:999px;
+    backdrop-filter: blur(10px);
+  }
+
+  /* ── Hero 玻璃卡片 ── */
+  .hero {
+    margin-top: 34px;
+    border-radius: var(--radius);
+    border: 1px solid var(--glass-border);
+    background: linear-gradient(160deg, var(--glass-highlight), var(--glass));
+    backdrop-filter: blur(18px);
+    padding: 24px 20px;
+    position: relative;
+    box-shadow:
+      0 24px 60px -30px rgba(0,0,0,.8),
+      inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .hero::before { /* 玻璃顶部高光条 */
+    content:''; position:absolute; top:0; left:12%; right:12%; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  }
+  .hero .ai-badge {
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; font-weight:600;
+    color:#fcd34d;
+    background: rgba(245,158,11,.12);
+    border:1px solid rgba(245,158,11,.3);
+    padding:5px 10px; border-radius:999px;
+  }
+  .hero h1 { font-size:26px; line-height:1.25; margin-top:14px; font-weight:700; letter-spacing:-.3px; }
+  .hero h1 em { font-style:normal; background: linear-gradient(90deg, var(--amber), var(--ember)); -webkit-background-clip:text; background-clip: text; color:transparent; }
+  .hero p { margin-top:10px; font-size:13px; color:var(--txt-dim); line-height:1.6; }
+  .hero .input {
+    margin-top:18px; display:flex; align-items:center; gap:10px;
+    border:1px solid var(--glass-border);
+    background: rgba(0,0,0,.3);
+    border-radius:14px; padding: 12px 14px;
+    font-size:13px; color: var(--txt-dim);
+  }
+  .hero .input .dot { width:6px; height:6px; border-radius:50%; background:var(--gold); box-shadow:0 0 10px var(--gold); animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── 玻璃功能卡 ── */
+  .grid { margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .card {
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    backdrop-filter: blur(14px);
+    padding: 16px 14px;
+    position: relative;
+    transition: transform .3s ease, border-color .3s ease, box-shadow .3s ease;
+    cursor: default;
+  }
+  .card:hover { transform: translateY(-3px); border-color: rgba(245,158,11,.4); box-shadow: 0 18px 40px -24px rgba(245,158,11,.45); }
+  .card .ic {
+    width: 34px; height: 34px; border-radius: 10px;
+    display:flex; align-items:center; justify-content:center; font-size:16px;
+    background: linear-gradient(135deg, rgba(251,191,36,.2), rgba(217,119,6,.25));
+    border: 1px solid rgba(245,158,11,.25);
+  }
+  .card h3 { font-size:13px; font-weight:600; margin-top:12px; }
+  .card p { font-size:11px; color:var(--txt-dim); margin-top:4px; line-height:1.5; }
+
+  /* ── 渐变主按钮（带发光） ── */
+  .cta {
+    margin-top:20px; width:100%;
+    padding: 14px; border:0; border-radius: 15px;
+    font-size:14px; font-weight:700; color:#1a1204;
+    background: linear-gradient(135deg, var(--amber), var(--gold), var(--ember));
+    cursor:pointer;
+    box-shadow: 0 14px 34px -12px rgba(245,158,11,.75), inset 0 1px 0 rgba(255,255,255,.5);
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .cta:hover { transform: translateY(-2px); box-shadow: 0 20px 44px -14px rgba(245,158,11,.9), inset 0 1px 0 rgba(255,255,255,.5); }
+  .cta:active { transform: translateY(0); }
+
+  .spacer { flex:1; }
+
+  /* ── 底部 nav（玻璃） ── */
+  .bottom-nav {
+    display:flex; justify-content:space-around;
+    border-radius: 18px;
+    border:1px solid var(--glass-border);
+    background: rgba(0,0,0,.35);
+    backdrop-filter: blur(18px);
+    padding: 10px 6px;
+    margin-top: 14px;
+  }
+  .bottom-nav .item { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10px; color:var(--txt-dim); }
+  .bottom-nav .item.active { color:var(--amber); }
+  .bottom-nav .item .i {
+    width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px;
+  }
+  .bottom-nav .item.active .i { background: rgba(245,158,11,.15); box-shadow: inset 0 0 0 1px rgba(245,158,11,.3); }
+
+  /* ── 说明面板 ── */
+  .notes { position:relative; z-index:1; width: 320px; }
+  .notes h2 { font-size:16px; font-weight:700; }
+  .notes p { font-size:12.5px; color:var(--txt-dim); line-height:1.7; margin-top:8px; }
+  .notes .k {
+    display:inline-block; font-size:11px; color:var(--amber);
+    border:1px solid rgba(245,158,11,.3); background:rgba(245,158,11,.08);
+    padding:3px 8px; border-radius:6px; margin:2px 2px 0 0;
+  }
+  .notes ul { margin-top:14px; list-style:none; }
+  .notes li { font-size:12px; color:var(--txt-dim); padding:6px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+  .notes li b { color:var(--txt); }
+
+  @media (max-width: 820px) { body { flex-direction: column; } .notes { width:100%; max-width:390px; } }
+</style>
+</head>
+<body>
+
+  <!-- 背景光晕 + 3D 光球 -->
+  <div class="aurora"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- 手机壳 demo -->
+  <div class="phone">
+    <div class="notch"></div>
+
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-logo">V</div>
+        <div class="brand-name">VeyaShip AI</div>
+      </div>
+      <div class="chip">9 个工具 · 6 工作流</div>
+    </div>
+
+    <div class="hero">
+      <span class="ai-badge">✦ AI 在线</span>
+      <h1>一句话，让 <em>AI 帮你选品</em></h1>
+      <p>说"帮我分析蓝牙耳机品类"→ AI 自动拆解任务、调用 9 个工具、多步执行、输出决策报告。</p>
+      <div class="input"><span class="dot"></span>“帮我分析宠物用品在 Amazon 的机会”</div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><div class="ic">🎯</div><h3>AI 选品决策</h3><p>市场容量 · 竞争格局 · 利润估算</p></div>
+      <div class="card"><div class="ic">🛡️</div><h3>整店巡检</h3><p>每日定时检查 · 自动待办清单</p></div>
+      <div class="card"><div class="ic">✍️</div><h3>Listing 生成</h3><p>Amazon / Shopify 多语言文案</p></div>
+      <div class="card"><div class="ic">📈</div><h3>利润计算</h3><p>真实净利 · 平台费率 · 运费</p></div>
+    </div>
+
+    <button class="cta">免费开始使用 →</button>
+    <div class="spacer"></div>
+
+    <div class="bottom-nav">
+      <div class="item active"><div class="i">⌂</div>首页</div>
+      <div class="item"><div class="i">☰</div>品类</div>
+      <div class="item"><div class="i">✦</div>助手</div>
+      <div class="item"><div class="i">☁</div>我的</div>
+    </div>
+  </div>
+
+  <!-- 说明面板 -->
+  <div class="notes">
+    <h2>为什么这版"高级"</h2>
+    <p>不是换色，是加了<b>深度四件套</b>：</p>
+    <span class="k">aurora 光晕</span><span class="k">3D 漂浮光球</span><span class="k">玻璃拟态</span><span class="k">渐变发光</span>
+    <ul>
+      <li><b>① 背景不是纯色</b>：radial 金色光晕缓慢流动，暗部有层次</li>
+      <li><b>② 3D 光球</b>：blur 球体 + rotateX/Y + 视差浮动，纯 CSS，零成本</li>
+      <li><b>③ 玻璃卡片</b>：半透明 + backdrop-blur + 顶部高光条 + 渐变边框</li>
+      <li><b>④ 主按钮渐变发光</b>：琥珀→金黄渐变 + 外发光 + hover 上浮</li>
+      <li><b>⑤ 圆角 16–18px</b>（现在是 6px）+ 微交互 hover 位移</li>
+    </ul>
+  </div>
+
+</body>
+</html>

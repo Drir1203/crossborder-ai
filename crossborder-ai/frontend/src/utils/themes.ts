@@ -19,6 +19,18 @@ export interface Theme {
     '--border': string
     '--input': string
     '--ring': string
+    // ── v2 高级感 token ──
+    '--glass-bg': string
+    '--glass-bg-strong': string
+    '--glass-border': string
+    '--glass-highlight': string
+    '--gradient-from': string
+    '--gradient-to': string
+    '--gradient-foreground': string
+    '--glow-primary': string
+    '--card-shadow': string
+    '--aurora-a': string
+    '--aurora-b': string
   }
 }
 
@@ -27,42 +39,64 @@ export const themes: Theme[] = [
     name: 'dark',
     label: '暗黑',
     colors: {
-      '--background': '240 25% 5%',         // 深色底 #0a0a0f
-      '--foreground': '220 7% 93%',         // 近白文字
-      '--card': '240 20% 7%',
-      '--card-foreground': '220 7% 93%',
-      '--primary': '234 56% 60%',           // 靛蓝 #5E6AD2
-      '--primary-foreground': '0 0% 100%',
-      '--secondary': '234 25% 15%',
-      '--secondary-foreground': '220 7% 88%',
-      '--muted': '240 20% 14%',
-      '--muted-foreground': '220 12% 55%',
-      '--accent': '234 30% 18%',
-      '--accent-foreground': '220 7% 90%',
-      '--border': '240 15% 18%',
-      '--input': '240 15% 18%',
-      '--ring': '234 56% 60%',
+      '--background': '30 15% 4%',          // 暖黑 #0C0A09
+      '--foreground': '40 10% 95%',         // 暖白文字
+      '--card': '30 10% 7%',
+      '--card-foreground': '40 10% 95%',
+      '--primary': '38 92% 50%',            // 琥珀金 #F59E0B
+      '--primary-foreground': '30 15% 4%',  // 琥珀上深字
+      '--secondary': '30 10% 14%',
+      '--secondary-foreground': '40 10% 88%',
+      '--muted': '30 10% 12%',
+      '--muted-foreground': '30 10% 55%',
+      '--accent': '38 40% 16%',
+      '--accent-foreground': '40 10% 90%',
+      '--border': '30 10% 15%',
+      '--input': '30 10% 15%',
+      '--ring': '38 92% 50%',
+      '--glass-bg': 'rgba(255, 255, 255, 0.045)',
+      '--glass-bg-strong': 'rgba(255, 255, 255, 0.07)',
+      '--glass-border': 'rgba(255, 255, 255, 0.10)',
+      '--glass-highlight': 'rgba(255, 255, 255, 0.14)',
+      '--gradient-from': '#fbbf24',
+      '--gradient-to': '#d97706',
+      '--gradient-foreground': '#1a1204',
+      '--glow-primary': 'rgba(245, 158, 11, 0.75)',
+      '--card-shadow': '0 24px 60px -30px rgba(0, 0, 0, 0.85)',
+      '--aurora-a': 'rgba(217, 119, 6, 0.35)',
+      '--aurora-b': 'rgba(245, 158, 11, 0.22)',
     },
   },
   {
     name: 'light',
     label: '明亮',
     colors: {
-      '--background': '210 40% 98%',
-      '--foreground': '234 50% 28%',
+      '--background': '40 10% 98%',
+      '--foreground': '30 14% 10%',
       '--card': '0 0% 100%',
-      '--card-foreground': '234 50% 28%',
-      '--primary': '234 60% 50%',           // 靛蓝（与暗色同一家族）
+      '--card-foreground': '30 14% 10%',
+      '--primary': '32 95% 44%',            // 琥珀 #D97706
       '--primary-foreground': '0 0% 100%',
-      '--secondary': '234 30% 94%',
-      '--secondary-foreground': '234 50% 30%',
-      '--muted': '234 25% 94%',
-      '--muted-foreground': '234 15% 50%',
-      '--accent': '234 45% 93%',
-      '--accent-foreground': '234 60% 45%',
-      '--border': '234 25% 91%',
-      '--input': '234 25% 91%',
-      '--ring': '234 60% 50%',
+      '--secondary': '40 20% 94%',
+      '--secondary-foreground': '30 14% 20%',
+      '--muted': '40 20% 94%',
+      '--muted-foreground': '30 10% 50%',
+      '--accent': '38 60% 92%',
+      '--accent-foreground': '32 60% 35%',
+      '--border': '40 20% 90%',
+      '--input': '40 20% 90%',
+      '--ring': '32 95% 44%',
+      '--glass-bg': 'rgba(255, 255, 255, 0.66)',
+      '--glass-bg-strong': 'rgba(255, 255, 255, 0.85)',
+      '--glass-border': 'rgba(255, 255, 255, 0.6)',
+      '--glass-highlight': 'rgba(255, 255, 255, 0.9)',
+      '--gradient-from': '#fbbf24',
+      '--gradient-to': '#d97706',
+      '--gradient-foreground': '#1a1204',
+      '--glow-primary': 'rgba(245, 158, 11, 0.45)',
+      '--card-shadow': '0 24px 60px -30px rgba(0, 0, 0, 0.35)',
+      '--aurora-a': 'rgba(217, 119, 6, 0.25)',
+      '--aurora-b': 'rgba(245, 158, 11, 0.18)',
     },
   },
   {
@@ -84,6 +118,17 @@ export const themes: Theme[] = [
       '--border': '195 25% 85%',
       '--input': '195 25% 85%',
       '--ring': '195 85% 40%',
+      '--glass-bg': 'rgba(255, 255, 255, 0.6)',
+      '--glass-bg-strong': 'rgba(255, 255, 255, 0.8)',
+      '--glass-border': 'rgba(255, 255, 255, 0.5)',
+      '--glass-highlight': 'rgba(255, 255, 255, 0.85)',
+      '--gradient-from': '#38bdf8',
+      '--gradient-to': '#0284c7',
+      '--gradient-foreground': '#ffffff',
+      '--glow-primary': 'rgba(2, 132, 199, 0.5)',
+      '--card-shadow': '0 24px 60px -30px rgba(0, 0, 0, 0.35)',
+      '--aurora-a': 'rgba(2, 132, 199, 0.30)',
+      '--aurora-b': 'rgba(56, 189, 248, 0.20)',
     },
   },
   {
@@ -105,6 +150,17 @@ export const themes: Theme[] = [
       '--border': '20 25% 88%',
       '--input': '20 25% 88%',
       '--ring': '20 85% 50%',
+      '--glass-bg': 'rgba(255, 255, 255, 0.6)',
+      '--glass-bg-strong': 'rgba(255, 255, 255, 0.8)',
+      '--glass-border': 'rgba(255, 255, 255, 0.5)',
+      '--glass-highlight': 'rgba(255, 255, 255, 0.85)',
+      '--gradient-from': '#fb923c',
+      '--gradient-to': '#ea580c',
+      '--gradient-foreground': '#ffffff',
+      '--glow-primary': 'rgba(234, 88, 12, 0.5)',
+      '--card-shadow': '0 24px 60px -30px rgba(0, 0, 0, 0.35)',
+      '--aurora-a': 'rgba(234, 88, 12, 0.30)',
+      '--aurora-b': 'rgba(251, 146, 60, 0.20)',
     },
   },
   {
@@ -126,6 +182,17 @@ export const themes: Theme[] = [
       '--border': '150 25% 88%',
       '--input': '150 25% 88%',
       '--ring': '150 60% 35%',
+      '--glass-bg': 'rgba(255, 255, 255, 0.6)',
+      '--glass-bg-strong': 'rgba(255, 255, 255, 0.8)',
+      '--glass-border': 'rgba(255, 255, 255, 0.5)',
+      '--glass-highlight': 'rgba(255, 255, 255, 0.85)',
+      '--gradient-from': '#34d399',
+      '--gradient-to': '#059669',
+      '--gradient-foreground': '#ffffff',
+      '--glow-primary': 'rgba(5, 150, 105, 0.5)',
+      '--card-shadow': '0 24px 60px -30px rgba(0, 0, 0, 0.35)',
+      '--aurora-a': 'rgba(5, 150, 105, 0.30)',
+      '--aurora-b': 'rgba(52, 211, 153, 0.20)',
     },
   },
 ]

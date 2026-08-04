@@ -27,9 +27,13 @@ export function RootLayout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="relative flex h-screen overflow-hidden">
+      {/* 高级感背景：aurora 光晕 + 细腻颗粒 */}
+      <div className="aurora-layer" aria-hidden />
+      <div className="grain" aria-hidden />
+
       {/* 桌面端侧边栏 */}
-      <div className="hidden lg:flex">
+      <div className="relative z-10 hidden lg:flex">
         <Sidebar />
       </div>
 
@@ -43,9 +47,9 @@ export function RootLayout() {
         </div>
       )}
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
         {/* 移动端顶栏 */}
-        <div className="lg:hidden flex items-center justify-between border-b bg-card px-4 h-14">
+        <div className="lg:hidden flex items-center justify-between border-b border-glass-border bg-glass backdrop-blur-xl px-4 h-14">
           <button onClick={() => setMobileSidebar(true)} className="p-2 -ml-2">
             <Menu className="h-5 w-5" />
           </button>
