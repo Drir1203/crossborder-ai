@@ -24,45 +24,45 @@ export interface Theme {
 
 export const themes: Theme[] = [
   {
-    name: 'light',
-    label: '明亮',
-    colors: {
-      '--background': '210 40% 98%',        // #F8FAFC 浅灰蓝
-      '--foreground': '226 60% 33%',        // #1E3A8A 深蓝文字
-      '--card': '0 0% 100%',
-      '--card-foreground': '226 60% 33%',
-      '--primary': '226 71% 40%',           // #1E40AF 主蓝
-      '--primary-foreground': '0 0% 100%',
-      '--secondary': '215 42% 94%',
-      '--secondary-foreground': '226 60% 30%',
-      '--muted': '215 42% 94%',
-      '--muted-foreground': '215 20% 50%',
-      '--accent': '214 90% 93%',            // #DBEAFE
-      '--accent-foreground': '226 71% 40%',
-      '--border': '214 50% 92%',
-      '--input': '214 50% 92%',
-      '--ring': '226 71% 40%',
-    },
-  },
-  {
     name: 'dark',
     label: '暗黑',
     colors: {
-      '--background': '226 50% 7%',         // 深海军蓝
-      '--foreground': '214 30% 93%',
-      '--card': '226 45% 9%',
-      '--card-foreground': '214 30% 93%',
-      '--primary': '217 91% 60%',           // #3B82F6 亮蓝
-      '--primary-foreground': '226 50% 8%',
-      '--secondary': '226 30% 16%',
-      '--secondary-foreground': '214 25% 85%',
-      '--muted': '226 30% 15%',
-      '--muted-foreground': '214 18% 60%',
-      '--accent': '226 30% 20%',
-      '--accent-foreground': '214 25% 88%',
-      '--border': '226 25% 16%',
-      '--input': '226 25% 16%',
-      '--ring': '217 91% 60%',
+      '--background': '240 25% 5%',         // 深色底 #0a0a0f
+      '--foreground': '220 7% 93%',         // 近白文字
+      '--card': '240 20% 7%',
+      '--card-foreground': '220 7% 93%',
+      '--primary': '234 56% 60%',           // 靛蓝 #5E6AD2
+      '--primary-foreground': '0 0% 100%',
+      '--secondary': '234 25% 15%',
+      '--secondary-foreground': '220 7% 88%',
+      '--muted': '240 20% 14%',
+      '--muted-foreground': '220 12% 55%',
+      '--accent': '234 30% 18%',
+      '--accent-foreground': '220 7% 90%',
+      '--border': '240 15% 18%',
+      '--input': '240 15% 18%',
+      '--ring': '234 56% 60%',
+    },
+  },
+  {
+    name: 'light',
+    label: '明亮',
+    colors: {
+      '--background': '210 40% 98%',
+      '--foreground': '234 50% 28%',
+      '--card': '0 0% 100%',
+      '--card-foreground': '234 50% 28%',
+      '--primary': '234 60% 50%',           // 靛蓝（与暗色同一家族）
+      '--primary-foreground': '0 0% 100%',
+      '--secondary': '234 30% 94%',
+      '--secondary-foreground': '234 50% 30%',
+      '--muted': '234 25% 94%',
+      '--muted-foreground': '234 15% 50%',
+      '--accent': '234 45% 93%',
+      '--accent-foreground': '234 60% 45%',
+      '--border': '234 25% 91%',
+      '--input': '234 25% 91%',
+      '--ring': '234 60% 50%',
     },
   },
   {
