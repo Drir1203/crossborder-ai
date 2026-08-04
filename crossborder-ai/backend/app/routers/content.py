@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import RateLimit
 from app.dependencies import get_current_user
@@ -281,7 +282,7 @@ async def generate_listing(
         seo_description=seo.get("seo_description", ""),
         image_url=image_url,
         image_task_id=image_task_id,
-        model_used="deepseek-chat",
+        model_used=settings.DEEPSEEK_MODEL,
     )
 
 

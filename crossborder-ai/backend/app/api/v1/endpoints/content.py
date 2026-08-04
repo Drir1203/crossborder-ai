@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user, PaginationParams
 from app.models.user import User
@@ -50,7 +51,7 @@ async def generate_content(
         source_text=payload.source_text,
         source_image_url=payload.source_image_url,
         target_language=payload.target_language,
-        model_used="deepseek-chat",
+        model_used=settings.DEEPSEEK_MODEL,
         creds_cost=1,
     )
     db.add(generation)
