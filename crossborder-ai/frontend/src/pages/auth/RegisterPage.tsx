@@ -47,7 +47,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
               <Globe className="h-4 w-4 text-white" />
             </div>
             <span className="font-bold text-lg text-slate-800">VeyaShip AI</span>
@@ -79,7 +79,7 @@ export default function RegisterPage() {
                     className="h-10 rounded-lg border-slate-200" />
                   {errors.username && <p className="text-xs text-red-500">{errors.username.message}</p>}
                 </div>
-                <Button type="button" onClick={nextStep} className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">继续</Button>
+                <Button type="button" onClick={nextStep} className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">继续</Button>
               </>
             ) : (
               <>
@@ -104,7 +104,7 @@ export default function RegisterPage() {
                     className="h-10 rounded-lg border-slate-200" />
                   {errors.confirmPassword && <p className="text-xs text-red-500">{errors.confirmPassword.message}</p>}
                 </div>
-                <Button type="submit" disabled={isLoading} className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+                <Button type="submit" disabled={isLoading} className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
                   {isLoading ? '注册中...' : '创建账号'}
                 </Button>
               </>
@@ -112,7 +112,7 @@ export default function RegisterPage() {
           </form>
 
           <p className="text-center text-sm text-slate-500">
-            已有账号？<Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">登录</Link>
+            已有账号？<Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">登录</Link>
           </p>
         </div>
 

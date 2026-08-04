@@ -31,7 +31,7 @@ const PLATFORMS = [
   { id: 'aliexpress', label: 'AliExpress', color: 'bg-rose-500/10 text-rose-600' },
   { id: 'walmart', label: 'Walmart', color: 'bg-sky-500/10 text-sky-600' },
   { id: 'shopee', label: 'Shopee', color: 'bg-orange-600/10 text-orange-600' },
-  { id: 'lazada', label: 'Lazada', color: 'bg-violet-500/10 text-violet-600' },
+  { id: 'lazada', label: 'Lazada', color: 'bg-blue-500/10 text-blue-600' },
 ]
 
 export default function ProductDetailPage() {

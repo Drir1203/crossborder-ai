@@ -4,48 +4,48 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 210 40% 20%;
+    --background: 210 40% 98%;        /* #F8FAFC 浅灰蓝 */
+    --foreground: 226 60% 33%;        /* #1E3A8A 深蓝文字 */
     --card: 0 0% 100%;
-    --card-foreground: 210 40% 20%;
+    --card-foreground: 226 60% 33%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 40% 20%;
-    --primary: 210 100% 45%;
+    --popover-foreground: 226 60% 33%;
+    --primary: 226 71% 40%;           /* #1E40AF 主蓝 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 210 50% 30%;
-    --muted: 210 30% 96%;
-    --muted-foreground: 210 20% 55%;
-    --accent: 210 40% 92%;
-    --accent-foreground: 210 50% 30%;
-    --destructive: 0 75% 55%;
+    --secondary: 215 42% 94%;         /* #E9EEF6 */
+    --secondary-foreground: 226 60% 30%;
+    --muted: 215 42% 94%;
+    --muted-foreground: 215 20% 50%;
+    --accent: 214 90% 93%;            /* #DBEAFE */
+    --accent-foreground: 226 71% 40%;
+    --destructive: 0 72% 51%;         /* #DC2626 */
     --destructive-foreground: 0 0% 100%;
-    --border: 214 30% 90%;
-    --input: 214 30% 90%;
-    --ring: 210 100% 45%;
+    --border: 214 50% 92%;
+    --input: 214 50% 92%;
+    --ring: 226 71% 40%;
     --radius: 0.375rem;
   }
 
   .dark {
-    --background: 210 50% 8%;
-    --foreground: 210 20% 92%;
-    --card: 210 45% 10%;
-    --card-foreground: 210 20% 92%;
-    --popover: 210 45% 10%;
-    --popover-foreground: 210 20% 92%;
-    --primary: 210 100% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 30% 18%;
-    --secondary-foreground: 210 20% 85%;
-    --muted: 210 30% 18%;
-    --muted-foreground: 210 20% 60%;
-    --accent: 210 30% 22%;
-    --accent-foreground: 210 20% 85%;
-    --destructive: 0 70% 45%;
+    --background: 226 50% 7%;         /* 深海军蓝 */
+    --foreground: 214 30% 93%;
+    --card: 226 45% 9%;
+    --card-foreground: 214 30% 93%;
+    --popover: 226 45% 9%;
+    --popover-foreground: 214 30% 93%;
+    --primary: 217 91% 60%;           /* #3B82F6 亮蓝（暗色下主色提亮） */
+    --primary-foreground: 226 50% 8%;
+    --secondary: 226 30% 16%;
+    --secondary-foreground: 214 25% 85%;
+    --muted: 226 30% 15%;
+    --muted-foreground: 214 18% 60%;
+    --accent: 226 30% 20%;
+    --accent-foreground: 214 25% 88%;
+    --destructive: 0 70% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 210 30% 18%;
-    --input: 210 30% 18%;
-    --ring: 210 100% 50%;
+    --border: 226 25% 16%;
+    --input: 226 25% 16%;
+    --ring: 217 91% 60%;
   }
 }
 

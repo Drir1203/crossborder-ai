@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
@@ -30,6 +31,13 @@ const PLATFORMS = ['Amazon', 'Shopify', 'eBay', 'Etsy', 'Temu', 'TikTok Shop', '
 export default function LandingPage() {
   const navigate = useNavigate()
   const isLoggedIn = useAuthStore((s) => s.isAuthenticated)
+  const [keyword, setKeyword] = useState('')
+  const [preview, setPreview] = useState(false)
+
+  const handleAnalyze = () => {
+    if (!keyword.trim()) return
+    setPreview(true)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50/50">
@@ -37,18 +45,18 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-slate-200/60 bg-white/80 backdrop-blur-lg">
         <div className="max-w-5xl mx-auto flex items-center justify-between h-14 px-4 md:px-6">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center">
               <Globe className="h-3.5 w-3.5 text-white" />
             </div>
             <span className="font-bold text-sm">VeyaShip AI</span>
           </div>
           <div className="flex items-center gap-2">
             {isLoggedIn ? (
-              <Button size="sm" onClick={() => navigate('/app/dashboard')} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">进入应用</Button>
+              <Button size="sm" onClick={() => navigate('/app/dashboard')} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">进入应用</Button>
             ) : (
               <>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="text-slate-500">登录</Button>
-                <Button size="sm" onClick={() => navigate('/register')} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">免费注册</Button>
+                <Button size="sm" onClick={() => navigate('/register')} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">免费注册</Button>
               </>
             )}
           </div>
@@ -59,8 +67,8 @@ export default function LandingPage() {
         {/* ── HERO ─────────────────────────────────────────── */}
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-20 -left-20 w-72 h-72 bg-indigo-200/40 rounded-full blur-[100px]" />
-            <div className="absolute top-40 right-0 w-96 h-96 bg-violet-200/30 rounded-full blur-[120px]" />
+            <div className="absolute top-20 -left-20 w-72 h-72 bg-blue-200/40 rounded-full blur-[100px]" />
+            <div className="absolute top-40 right-0 w-96 h-96 bg-blue-200/30 rounded-full blur-[120px]" />
             <div className="absolute -bottom-20 left-1/3 w-64 h-64 bg-sky-200/30 rounded-full blur-[80px]" />
           </div>
 
@@ -68,7 +76,7 @@ export default function LandingPage() {
             <motion.div variants={container} initial="hidden" animate="show" className="text-center space-y-7">
 
               <motion.div variants={item}>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3.5 py-1 text-xs font-medium text-indigo-600">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3.5 py-1 text-xs font-medium text-blue-600">
                   <Sparkles className="h-3 w-3" /> 跨境电商 AI 决策引擎 · AI Agent 自动化
                 </span>
               </motion.div>
@@ -77,7 +85,7 @@ export default function LandingPage() {
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
                   <span className="text-slate-800">这个品能不能做？</span>
                   <br />
-                  <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-r from-blue-600 via-blue-600 to-blue-700 bg-clip-text text-transparent">
                     AI 帮你做跨境决策
                   </span>
                 </h1>
@@ -88,11 +96,59 @@ export default function LandingPage() {
                 </p>
               </motion.div>
 
-              <motion.div variants={item} className="flex items-center justify-center gap-3 pt-1">
-                <Button size="lg" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="h-11 px-6 text-sm gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-                  {isLoggedIn ? '进入应用' : '免费开始使用'} <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
+              {/* AI 分析输入框（show, don't tell） */}
+              <motion.div variants={item} className="w-full max-w-xl mx-auto space-y-3">
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
+                  <input
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+                    placeholder="输入品类名，如：蓝牙耳机、瑜伽裤、智能手表..."
+                    className="flex-1 h-10 px-3 text-sm outline-none rounded-lg"
+                  />
+                  <Button onClick={handleAnalyze} className="h-10 px-4 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shrink-0">
+                    <Sparkles className="h-4 w-4" /> AI 分析
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-400">免费体验 · 无需注册 · 输入品类立刻看到 AI 市场分析</p>
               </motion.div>
+
+              {/* AI 分析结果预览 */}
+              {preview && (
+                <motion.div variants={item} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                  className="w-full max-w-xl mx-auto text-left">
+                  <div className="rounded-xl border border-blue-200 bg-white/90 backdrop-blur p-5 shadow-md">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        AI 正在分析「{keyword || '蓝牙耳机'}」
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-mono">market scan · amazon US</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      {[
+                        { label: '月搜索量', value: '8.2 万', tone: 'text-slate-800' },
+                        { label: '竞争强度', value: '中高', tone: 'text-amber-600' },
+                        { label: '预计利润率', value: '32%', tone: 'text-emerald-600' },
+                      ].map((m) => (
+                        <div key={m.label} className="rounded-lg bg-blue-50/60 border border-blue-100 p-2.5">
+                          <p className="text-[11px] text-slate-500">{m.label}</p>
+                          <p className={`text-base font-bold font-mono ${m.tone}`}>{m.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-3">
+                      {keyword || '蓝牙耳机'}：市场容量大但竞争激烈，低价位段同质化严重；建议差异化切入
+                      <b className="text-slate-700">降噪/长续航</b>细分，1688 采购价 ¥35-60，毛利率约 30-35%。
+                    </p>
+                    <div className="text-center">
+                      <Link to={isLoggedIn ? '/app/dashboard' : '/register'} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+                        登录查看完整分析报告 <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
               <motion.div variants={item} className="flex items-center justify-center gap-5 text-xs text-slate-400">
                 <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" />无需信用卡</span>
@@ -124,8 +180,8 @@ export default function LandingPage() {
             ].map((s, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }}
                 className="text-center p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
-                <div className="text-xs font-mono text-indigo-500 mb-2">{s.step}</div>
-                <s.icon className="h-5 w-5 text-indigo-500 mx-auto mb-2" />
+                <div className="text-xs font-mono text-blue-600 mb-2">{s.step}</div>
+                <s.icon className="h-5 w-5 text-blue-600 mx-auto mb-2" />
                 <h3 className="font-medium text-sm text-slate-700 mb-0.5">{s.title}</h3>
                 <p className="text-xs text-slate-400">{s.desc}</p>
               </motion.div>
@@ -141,8 +197,8 @@ export default function LandingPage() {
             {FEATURES.map((f, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.04 }}
                 className="rounded-xl bg-white border border-slate-200 p-5 hover:shadow-md transition-shadow">
-                <div className="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center mb-3">
-                  <f.icon className="h-4 w-4 text-indigo-600" />
+                <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center mb-3">
+                  <f.icon className="h-4 w-4 text-blue-600" />
                 </div>
                 <h3 className="font-medium text-sm text-slate-800 mb-1">{f.title}</h3>
                 <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
@@ -164,7 +220,7 @@ export default function LandingPage() {
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }}
                 className="rounded-xl bg-slate-50 border border-slate-200 p-5">
                 <div className="flex items-start gap-2">
-                  <Bot className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
+                  <Bot className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
                   <div>
                     <p className="text-sm font-medium text-slate-800">{c.prompt}</p>
                     <p className="text-xs text-slate-500 mt-2 leading-relaxed">{c.steps}</p>
@@ -195,9 +251,9 @@ export default function LandingPage() {
               </div>
             </motion.div>
             <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
-              className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 shadow-sm">
+              className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-medium text-indigo-600 uppercase tracking-wide">AI 生成的 Amazon Listing</div>
+                <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">AI 生成的 Amazon Listing</div>
                 <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">已翻译 英文</span>
               </div>
               <div className="space-y-2 text-sm">
@@ -230,11 +286,11 @@ export default function LandingPage() {
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />利润计算器</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />合规审查</li>
               </ul>
-              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '免费开始'}</Button>
+              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white">{isLoggedIn ? '进入应用' : '免费开始'}</Button>
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.05 }}
-              className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-6 relative">
-              <div className="absolute -top-2.5 right-4 bg-indigo-600 text-white text-xs px-3 py-0.5 rounded-full">推荐</div>
+              className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-6 relative">
+              <div className="absolute -top-2.5 right-4 bg-blue-600 text-white text-xs px-3 py-0.5 rounded-full">推荐</div>
               <h3 className="font-semibold text-slate-800">Standard</h3>
               <p className="text-2xl font-bold text-slate-800 mt-2">¥99<span className="text-sm font-normal text-slate-400">/月</span></p>
               <ul className="mt-4 space-y-2 text-sm text-slate-600">
@@ -243,7 +299,7 @@ export default function LandingPage() {
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />Shopify 一键发布</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />批量 AI 处理</li>
               </ul>
-              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '选择 Standard'}</Button>
+              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white">{isLoggedIn ? '进入应用' : '选择 Standard'}</Button>
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
               className="rounded-xl border border-slate-200 bg-white p-6">
@@ -255,36 +311,35 @@ export default function LandingPage() {
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />不限量品类分析报告</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />优先技术支持</li>
               </ul>
-              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white">{isLoggedIn ? '进入应用' : '选择 Professional'}</Button>
+              <Button size="sm" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white">{isLoggedIn ? '进入应用' : '选择 Professional'}</Button>
             </motion.div>
           </div>
         </section>
 
-        {/* ── 信任感 ──────────────────────────────────────── */}
-        <section className="max-w-3xl mx-auto px-4 py-8 text-center">
-          <div className="grid grid-cols-3 gap-8 text-center">
-            <div>
-              <p className="text-2xl font-bold text-slate-800">500+</p>
-              <p className="text-xs text-slate-500 mt-1">内测用户</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-800">16</p>
-              <p className="text-xs text-slate-500 mt-1">支持语言</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-800">8</p>
-              <p className="text-xs text-slate-500 mt-1">支持平台</p>
-            </div>
+        {/* ── 数据指标 ────────────────────────────────────── */}
+        <section className="max-w-3xl mx-auto px-4 py-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { value: '9', label: 'AI 业务工具', tone: 'text-slate-800' },
+              { value: '6', label: '自动化工作流', tone: 'text-blue-600' },
+              { value: '4', label: '端到端闭环', tone: 'text-emerald-600' },
+              { value: '8', label: '支持平台', tone: 'text-amber-600' },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+                <p className={`text-2xl font-bold font-mono ${s.tone}`}>{s.value}</p>
+                <p className="text-xs text-slate-500 mt-1">{s.label}</p>
+              </div>
+            ))}
           </div>
         </section>
 
         {/* ── CTA ──────────────────────────────────────────── */}
         <section className="max-w-lg mx-auto px-4 py-16 text-center">
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-            className="rounded-2xl bg-gradient-to-br from-indigo-50 via-white to-violet-50 border border-slate-200 p-8 space-y-4">
+            className="rounded-2xl bg-gradient-to-br from-blue-50 via-white to-blue-50 border border-slate-200 p-8 space-y-4">
             <h2 className="text-lg font-semibold text-slate-800">开始免费使用</h2>
             <p className="text-sm text-slate-500">无需信用卡，无需配置 API Key</p>
-            <Button size="lg" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="h-11 px-6 text-sm gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+            <Button size="lg" onClick={() => navigate(isLoggedIn ? '/app/dashboard' : '/register')} className="h-11 px-6 text-sm gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
               {isLoggedIn ? '进入应用' : '创建免费账号'} <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </motion.div>

@@ -70,9 +70,9 @@ export default function BillingPage() {
           const isCurrent = user.plan === plan.id
           const isSelected = selectedPlan === plan.id
           return (
-            <Card key={plan.id} className={`relative ${plan.recommended ? 'border-indigo-400 shadow-md' : ''} ${isCurrent ? 'border-emerald-400' : ''}`}>
+            <Card key={plan.id} className={`relative ${plan.recommended ? 'border-blue-500 shadow-md' : ''} ${isCurrent ? 'border-emerald-400' : ''}`}>
               {plan.recommended && !isCurrent && (
-                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">推荐</div>
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">推荐</div>
               )}
               {isCurrent && (
                 <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs px-3 py-0.5 rounded-full whitespace-nowrap">当前套餐</div>
@@ -112,7 +112,7 @@ export default function BillingPage() {
 
       {/* 升级流程 */}
       {selectedPlan && (
-        <Card className="border-indigo-500/30">
+        <Card className="border-blue-600/30">
           <CardHeader>
             <CardTitle className="text-sm">升级到 {plans.find(p => p.id === selectedPlan)?.name}</CardTitle>
           </CardHeader>
@@ -125,7 +125,7 @@ export default function BillingPage() {
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
                     placeholder="微信号 / 手机号"
-                    className="w-full h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-indigo-400"
+                    className="w-full h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-blue-500"
                   />
                 </div>
                 <Button

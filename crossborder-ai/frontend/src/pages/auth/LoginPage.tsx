@@ -40,7 +40,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
               <Globe className="h-4 w-4 text-white" />
             </div>
             <span className="font-bold text-lg text-slate-800">VeyaShip AI</span>
@@ -78,13 +78,13 @@ export default function LoginPage() {
               {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
             </div>
 
-            <Button type="submit" disabled={isLoading} className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+            <Button type="submit" disabled={isLoading} className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
               {isLoading ? '登录中...' : '登录'}
             </Button>
           </form>
 
           <p className="text-center text-sm text-slate-500">
-            还没有账号？<Link to="/register" className="text-indigo-600 hover:text-indigo-700 font-medium">注册</Link>
+            还没有账号？<Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">注册</Link>
           </p>
         </div>
 

@@ -17,7 +17,7 @@ export default function AnalyticsPage() {
 
   const items = [
     { label: '商品总数', value: data?.products?.total ?? 0, icon: Package, color: 'text-blue-500' },
-    { label: 'Listing 总数', value: data?.listings?.total ?? 0, icon: FileText, color: 'text-violet-500' },
+    { label: 'Listing 总数', value: data?.listings?.total ?? 0, icon: FileText, color: 'text-blue-500' },
     { label: 'AI 生成次数', value: data?.content?.total_generations ?? 0, icon: Sparkles, color: 'text-amber-500' },
     { label: '已发布', value: data?.listings?.published ?? 0, icon: TrendingUp, color: 'text-emerald-500' },
   ]
