@@ -38,6 +38,8 @@ export default function LoginPage() {
     <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
       {/* 高级感背景：aurora 光晕 + 细腻颗粒 */}
       <div className="aurora-layer" aria-hidden />
+      <div className="glow glow-1" aria-hidden />
+      <div className="glow glow-2" aria-hidden />
       <div className="grain" aria-hidden />
 
       <div className="relative z-10 w-full max-w-sm space-y-6">
@@ -69,7 +71,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-sm text-foreground">邮箱</Label>
               <Input id="email" type="email" placeholder="you@company.com" {...register('email')}
-                className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/20" />
+                className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/30" />
               {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
             </div>
 
@@ -77,7 +79,7 @@ export default function LoginPage() {
               <Label htmlFor="password" className="text-sm text-foreground">密码</Label>
               <div className="relative">
                 <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="输入密码" {...register('password')}
-                  className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/20 pr-10" />
+                  className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/30 pr-10" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

@@ -46,6 +46,8 @@ export default function RegisterPage() {
     <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
       {/* 高级感背景：aurora 光晕 + 细腻颗粒 */}
       <div className="aurora-layer" aria-hidden />
+      <div className="glow glow-1" aria-hidden />
+      <div className="glow glow-2" aria-hidden />
       <div className="grain" aria-hidden />
 
       <div className="relative z-10 w-full max-w-sm space-y-6">
@@ -77,13 +79,13 @@ export default function RegisterPage() {
                 <div className="space-y-1.5">
                   <Label className="text-sm text-foreground">邮箱</Label>
                   <Input type="email" placeholder="you@company.com" {...register('email')}
-                    className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/20" />
+                    className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/30" />
                   {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm text-foreground">用户名</Label>
                   <Input placeholder="your-name" {...register('username')}
-                    className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/20" />
+                    className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/30" />
                   {errors.username && <p className="text-xs text-red-500">{errors.username.message}</p>}
                 </div>
                 <Button type="button" onClick={nextStep} className="w-full h-10 rounded-lg">继续</Button>
@@ -97,7 +99,7 @@ export default function RegisterPage() {
                   <Label className="text-sm text-foreground">密码</Label>
                   <div className="relative">
                     <Input type={showPassword ? 'text' : 'password'} placeholder="至少 6 位" {...register('password')}
-                      className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/20 pr-10" />
+                      className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/30 pr-10" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -108,7 +110,7 @@ export default function RegisterPage() {
                 <div className="space-y-1.5">
                   <Label className="text-sm text-foreground">确认密码</Label>
                   <Input type="password" placeholder="再次输入密码" {...register('confirmPassword')}
-                    className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/20" />
+                    className="h-10 rounded-lg border-glass-border bg-black/10 dark:bg-black/30" />
                   {errors.confirmPassword && <p className="text-xs text-red-500">{errors.confirmPassword.message}</p>}
                 </div>
                 <Button type="submit" disabled={isLoading} className="w-full h-10 rounded-lg">

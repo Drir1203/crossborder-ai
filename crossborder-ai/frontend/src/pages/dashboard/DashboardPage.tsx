@@ -216,7 +216,7 @@ export default function DashboardPage() {
               onChange={(e) => setCategoryInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
               placeholder="输入品类名，如：蓝牙耳机、瑜伽裤、智能手表..."
-              className="flex-1 h-9 rounded-lg bg-black/10 dark:bg-black/20"
+              className="flex-1 h-9 rounded-lg bg-black/10 dark:bg-black/30"
             />
             <Button size="sm" className="gap-1 shrink-0" onClick={handleAnalyze} disabled={analyzing}>
               {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><TrendingUp className="h-4 w-4" />AI 分析</>}
@@ -279,7 +279,7 @@ export default function DashboardPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               placeholder={'粘贴商品链接，或说「帮我算利润」...'}
-              className="flex-1 h-10 rounded-lg bg-black/10 dark:bg-black/20"
+              className="flex-1 h-10 rounded-lg bg-black/10 dark:bg-black/30"
             />
             <Button onClick={handleSubmit} disabled={!input.trim() || agentMutation.isPending} className="h-10 px-4">
               {agentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}

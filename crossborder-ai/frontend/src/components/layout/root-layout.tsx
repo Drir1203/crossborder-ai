@@ -30,6 +30,8 @@ export function RootLayout() {
     <div className="relative flex h-screen overflow-hidden">
       {/* 高级感背景：aurora 光晕 + 细腻颗粒 */}
       <div className="aurora-layer" aria-hidden />
+      <div className="glow glow-1" aria-hidden />
+      <div className="glow glow-2" aria-hidden />
       <div className="grain" aria-hidden />
 
       {/* 桌面端侧边栏 */}

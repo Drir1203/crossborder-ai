@@ -59,10 +59,10 @@
     --input: 30 10% 15%;
     --ring: 38 92% 50%;
     /* ── v2 高级感 token（玻璃 / 渐变 / 发光 / 阴影） ── */
-    --glass-bg: rgba(255, 255, 255, 0.045);
-    --glass-bg-strong: rgba(255, 255, 255, 0.07);
-    --glass-border: rgba(255, 255, 255, 0.10);
-    --glass-highlight: rgba(255, 255, 255, 0.14);
+    --glass-bg: rgba(255, 255, 255, 0.09);
+    --glass-bg-strong: rgba(255, 255, 255, 0.13);
+    --glass-border: rgba(255, 255, 255, 0.16);
+    --glass-highlight: rgba(255, 255, 255, 0.22);
     --gradient-from: #fbbf24;
     --gradient-to: #d97706;
     --gradient-foreground: #1a1204;
@@ -123,6 +123,23 @@
   opacity: .05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 256px 256px;
+}
+
+/* ── 柔光池（3D 深度来源，不是"球"：大、虚、低透明度、慢飘） ── */
+.glow {
+  position: fixed;
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(60px);
+  will-change: transform;
+}
+.glow-1 { width: 320px; height: 320px; top: 12%; left: 8%; background: radial-gradient(circle, rgba(245,158,11,0.20), transparent 65%); animation: glow-float 16s ease-in-out infinite; }
+.glow-2 { width: 280px; height: 280px; bottom: 15%; right: 12%; background: radial-gradient(circle, rgba(217,119,6,0.16), transparent 65%); animation: glow-float 20s ease-in-out infinite -7s; }
+@keyframes glow-float {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-22px); }
+  100% { transform: translateY(0); }
 }
 
 /* 主题切换过渡动画 */
