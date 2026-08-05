@@ -51,6 +51,6 @@ Page({
 
   // 跳转页面
   goCategory() { wx.switchTab({ url: '/pages/category/category' }) },
-  goProfit() { wx.switchTab({ url: '/pages/profit/profit' }) },
+  goProfit() { wx.navigateTo({ url: '/pages/profit/profit' }) },
   goStoreCheck() { wx.navigateTo({ url: '/pages/storecheck/storecheck' }) },
 })

@@ -52,4 +52,8 @@ module.exports = {
   // 整店巡检
   getStoreCheckHistory: () => request('GET', '/analytics/store-check-history'),
   runStoreCheck: () => request('POST', '/analytics/store-check'),
+
+  // Shopify 渠道 / 订单
+  getChannels: () => request('GET', '/shopify/channels'),
+  getOrders: (channelId) => request('GET', `/shopify/orders?channel_id=${channelId}`),
 }

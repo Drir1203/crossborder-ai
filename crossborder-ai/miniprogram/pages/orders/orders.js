@@ -15,7 +15,7 @@ Page({
 
   async loadChannels() {
     try {
-      const data = await api.request('GET', '/shopify/channels')
+      const data = await api.getChannels()
       this.setData({ channels: data || [] })
       if (data && data.length > 0) {
         this.setData({ selectedChannel: data[0].id })
@@ -33,7 +33,7 @@ Page({
   async loadOrders(channelId) {
     this.setData({ loading: true })
     try {
-      const data = await api.request('GET', `/shopify/orders?channel_id=${channelId}`)
+      const data = await api.getOrders(channelId)
       this.setData({ orders: data || [], loading: false })
     } catch (e) {
       this.setData({ loading: false })
