@@ -30,6 +30,7 @@
 | **DEPLOYMENT.md** | ⭐ 部署架构 + GitHub Actions CI/CD 流水线 + 技术决策 + 回滚方案（面试可讲） | 部署/运维/面试 |
 | **DEPLOYMENT_CHECKLIST.md** | 从零部署的操作清单（早期，偏一次性引导） | 重新从零部署时 |
 | **DEPLOYMENT_COMPLETE.md** | 上线备忘：访问地址、ICP 备案待办、后续事项 | 看线上状态与待办 |
+| **ONEBOUND_ACCESS_REQUEST.md** | Onebound 接口开通需求说明：只需 `1688.item_get`，含话术/参数/用量/FAQ | 联系客服开通权限时 |
 
 ## 四、商业 / 战略 / 面试
 
