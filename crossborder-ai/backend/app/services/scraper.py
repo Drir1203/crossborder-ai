@@ -17,8 +17,10 @@
   → 返回结构化数据 → 存入数据库
 """
 
+import ipaddress
 import re
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -53,10 +55,9 @@ async def scrape_1688(
         ValueError: URL 格式不对（不是 1688 链接）
         RuntimeError: 所有方案都失败了
     """
-    # ── 1. 校验链接 ─────────────────────────────────────────
-    # 只支持 1688 链接，淘宝/拼多多不走这个爬虫
-    if "1688.com" not in url:
-        raise ValueError("仅支持 1688.com 的商品链接")
+    # ── 1. 校验链接（防 SSRF）────────────────────────────────
+    # 只允许 1688.com 真实商品链接：拒绝伪装域名、IP 直连、私网/环回地址
+    _validate_1688_url(url)
 
     # 从链接中提取商品 ID（如 https://detail.1688.com/offer/123456.html → 123456）
     offer_id = _extract_offer_id(url)
@@ -93,6 +94,44 @@ async def scrape_1688(
         "scrape_failed",
         "1688 对自动化访问有严格限制，当前无法自动抓取。请先在「设置」页面配置数据接口。",
     )
+
+
+def _validate_1688_url(url: str) -> None:
+    """校验 URL 必须是 1688.com 的商品链接，阻止 SSRF。
+
+    攻击面：用户/Agent 传入任意 URL，后端会用 httpx / curl_cffi 直接抓取。
+    之前只用 ``"1688.com" in url`` 子串判断，可被 ``http://evil.com/1688.com``
+    或 ``http://127.0.0.1/...`` 绕过，变成内网探测（SSRF）。
+    现在要求：
+    - scheme 只能是 http/https
+    - 主机名必须是 ``1688.com`` 或 ``*.1688.com`` 子域名（detail/m/www…）
+    - 拒绝 IP 直连（私网/环回/保留地址，如 127.0.0.1、169.254.169.254 云元数据）
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        raise ValueError("仅支持 1688.com 的商品链接")
+
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("仅支持 1688.com 的商品链接")
+
+    # hostname 自动剥离端口与 userinfo（http://1688.com@127.0.0.1 → 127.0.0.1）
+    host = (parsed.hostname or "").lower()
+    if not host:
+        raise ValueError("仅支持 1688.com 的商品链接")
+
+    # 域名必须精确匹配 1688.com 或其子域名，封死 evil.com/1688.com 这类伪装
+    if host != "1688.com" and not host.endswith(".1688.com"):
+        raise ValueError("仅支持 1688.com 的商品链接")
+
+    # IP 直连兜底：1688 商品链接不会用 IP，一律拒绝（含私网/环回）
+    if all(ch in "0123456789." for ch in host):
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            raise ValueError("仅支持 1688.com 的商品链接")
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ValueError("仅支持 1688.com 的商品链接")
 
 
 def _extract_offer_id(url: str) -> str | None:

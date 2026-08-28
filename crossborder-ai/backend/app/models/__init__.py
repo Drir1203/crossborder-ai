@@ -14,5 +14,9 @@ from app.models.shopify_channel import ShopifyChannel
 from app.models.batch_job import BatchJob
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.store_check_log import StoreCheckLog
+from app.models.payment import PaymentInvoice, Subscription
+from app.models.rate_limit import RateLimitWindow
+from app.models.agent_task import AgentTask
+from app.models.plan_upgrade import PlanUpgradeRequest
 
-__all__ = ["User", "Product", "SystemConfig", "Persona", "ShopifyChannel", "BatchJob", "Conversation", "ConversationMessage", "StoreCheckLog"]
+__all__ = ["User", "Product", "SystemConfig", "Persona", "ShopifyChannel", "BatchJob", "Conversation", "ConversationMessage", "StoreCheckLog", "Subscription", "PaymentInvoice", "RateLimitWindow", "AgentTask", "PlanUpgradeRequest"]

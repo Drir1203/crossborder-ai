@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import RateLimit
 from app.core.security import (
@@ -194,7 +195,15 @@ async def get_me(
     Returns:
         UserResponse: 用户信息（不会暴露密码哈希）
     """
-    return current_user
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        credits=current_user.credits,
+        plan=current_user.plan,
+        created_at=current_user.created_at,
+        is_admin=current_user.email.lower() in {e.lower() for e in settings.ADMIN_EMAILS},
+    )
 
 
 class WeChatLoginRequest(BaseModel):

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { CheckCircle2, CreditCard, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,8 +18,27 @@ interface Plan {
   recommended: boolean
 }
 
+interface UpgradeRecord {
+  id: string
+  plan: string
+  contact: string
+  order_id: string
+  amount: number
+  status: 'pending' | 'approved' | 'rejected'
+  note: string
+  created_at: string | null
+  handled_at: string | null
+}
+
+const STATUS_META: Record<UpgradeRecord['status'], { label: string; variant: 'success' | 'warning' | 'destructive' }> = {
+  pending: { label: '待确认', variant: 'warning' },
+  approved: { label: '已开通', variant: 'success' },
+  rejected: { label: '已拒绝', variant: 'destructive' },
+}
+
 export default function BillingPage() {
   const { user } = useAuthStore()
+  const queryClient = useQueryClient()
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
   const [contact, setContact] = useState('')
 
@@ -32,11 +51,21 @@ export default function BillingPage() {
   })
   const plans = data || []
 
+  const { data: upgradeData } = useQuery({
+    queryKey: ['my-upgrades'],
+    queryFn: async () => {
+      const res = await apiClient.get('/billing/upgrades')
+      return res.data.items as UpgradeRecord[]
+    },
+  })
+  const upgrades = upgradeData || []
+
   const upgradeMutation = useMutation({
     mutationFn: async (planId: string) => {
       const res = await apiClient.post('/billing/upgrade', { plan: planId, contact })
       return res.data
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-upgrades'] }),
   })
 
   if (!user) return null
@@ -153,6 +182,36 @@ export default function BillingPage() {
                 </Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 我的升级申请 */}
+      {upgrades.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">我的升级申请</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {upgrades.map((u) => {
+              const meta = STATUS_META[u.status]
+              return (
+                <div key={u.id} className="rounded-lg border p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">
+                        {u.plan === 'standard' ? 'Standard 套餐' : 'Professional 套餐'}
+                      </p>
+                      <Badge variant={meta.variant}>{meta.label}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      订单号 <code className="bg-muted px-1 py-0.5 rounded">{u.order_id}</code> · ¥{u.amount}
+                      {u.note ? ` · ${u.note}` : ''}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
           </CardContent>
         </Card>
       )}

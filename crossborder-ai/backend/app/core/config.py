@@ -99,6 +99,21 @@ class Settings(BaseSettings):
                 values["BACKEND_CORS_ORIGINS"] = [origins]
         return values
 
+    @model_validator(mode="after")
+    def validate_secrets(self) -> "Settings":
+        """生产环境（非 SQLite）必须配置 JWT 密钥，防止空密钥伪造登录令牌。
+
+        之前 JWT_SECRET_KEY 为空时只打印 WARNING 继续启动，
+        HMAC 用空串签名 → 任何 token 都可伪造，等于没有登录。
+        本地开发（USE_SQLITE=true）允许留空，方便开箱即用。
+        """
+        if not self.USE_SQLITE and not self.JWT_SECRET_KEY:
+            raise ValueError(
+                "JWT_SECRET_KEY 未配置：生产环境必须设置 JWT_SECRET_KEY，"
+                "否则任何人都能伪造登录令牌"
+            )
+        return self
+
     # --- Qdrant ---
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
@@ -146,6 +161,16 @@ class Settings(BaseSettings):
 
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
+
+    # --- Observability ---
+    # 设置 SENTRY_DSN 后自动接入 Sentry 错误告警（未设置则跳过）
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
+    # --- Admin ---
+    # 平台管理员邮箱列表（可配置多个），有权限审批套餐升级申请等后台操作。
+    # 通过 require_admin 依赖校验，生产环境用 .env 覆盖。
+    ADMIN_EMAILS: List[str] = ["admin@veyaship.com"]
 
     class Config:
         env_file = "../.env"      # .env 在项目根目录（相对于 backend/ 目录）

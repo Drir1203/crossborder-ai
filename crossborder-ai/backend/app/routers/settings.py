@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.crypto import decrypt_value, encrypt_value, mask_secret
 from app.core.database import get_db
 from app.dependencies import get_current_user
 from app.models.persona import Persona
@@ -73,9 +74,10 @@ async def get_scraping_config(
         select(SystemConfig).where(SystemConfig.key.in_(["onebound_api_key", "onebound_api_secret"]))
     )
     config = {row.key: row.value or "" for row in result.scalars().all()}
+    # 密文解密后掩码回显，API Key 明文不落前端
     return ScrapingConfigResponse(
-        api_key=config.get("onebound_api_key", ""),
-        api_secret=config.get("onebound_api_secret", ""),
+        api_key=mask_secret(decrypt_value(config.get("onebound_api_key", ""))),
+        api_secret=mask_secret(decrypt_value(config.get("onebound_api_secret", ""))),
         configured=bool(config.get("onebound_api_key")),
     )
 
@@ -85,7 +87,12 @@ async def update_scraping_config(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    for key, value in [("onebound_api_key", payload.api_key), ("onebound_api_secret", payload.api_secret)]:
+    # 落库前加密（Fernet），DB 泄漏时服务商密钥不暴露
+    encrypted = {
+        "onebound_api_key": encrypt_value(payload.api_key),
+        "onebound_api_secret": encrypt_value(payload.api_secret),
+    }
+    for key, value in encrypted.items():
         result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
         existing = result.scalar_one_or_none()
         if existing:
@@ -93,7 +100,11 @@ async def update_scraping_config(
         else:
             db.add(SystemConfig(key=key, value=value))
     await db.flush()
-    return ScrapingConfigResponse(api_key=payload.api_key, api_secret=payload.api_secret, configured=bool(payload.api_key))
+    return ScrapingConfigResponse(
+        api_key=mask_secret(payload.api_key),
+        api_secret=mask_secret(payload.api_secret),
+        configured=bool(payload.api_key),
+    )
 
 
 # ════════════════════════════════════════════════════════════════

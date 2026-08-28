@@ -20,7 +20,7 @@
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from app.core.config import settings
 from app.models.user import User
@@ -28,6 +28,96 @@ from app.services.ai.deepseek import DeepSeekService
 from app.services.scraper import scrape_1688
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _extract_json(text: str) -> Optional[dict]:
+    """从 LLM 输出中提取 JSON 对象（三级容错）
+
+    1. 先剥离 ```json 代码围栏（DeepSeek 偶尔会包围栏）
+    2. 贪婪匹配从第一个 { 到最后一个 }（容忍前后杂文）
+    3. json.loads 解析，失败返回 None
+
+    提取失败返回 None —— 调用方据此降级（structured=null + 原始文本兜底）。
+    """
+    if not text:
+        return None
+    cleaned = re.sub(r"```(?:json)?\s*([\s\S]*?)```", r"\1", text)
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group())
+    except json.JSONDecodeError:
+        return None
+
+
+def _render_report_markdown(structured: dict, keyword: str, mode: str = "select") -> str:
+    """把结构化报告数据渲染成 Markdown（与前端卡片同源，保证一致性）
+
+    Args:
+        structured: _extract_json 解析出的报告数据
+        keyword: 品类关键词
+        mode: 'select' 渲染候选商品表；'category' 不渲染（品类分析通常无具体候选）
+    """
+    market = structured.get("market") or {}
+    products = structured.get("products") or []
+    rec = structured.get("recommendation") or {}
+
+    lines = [f"## 「{keyword}」市场分析"]
+
+    # 市场指标表格
+    m_rows = [
+        ("月搜索量", market.get("monthly_search_volume")),
+        ("在售 Listing", market.get("active_listings")),
+        ("平均售价(USD)", market.get("avg_price_usd")),
+        ("头部集中度", market.get("head_concentration")),
+        ("竞争度(1-5)", market.get("competition_level")),
+        ("价格战程度(1-5)", market.get("price_war_level")),
+        ("新品存活率", market.get("new_product_survival_rate")),
+        ("用户痛点", "、".join(market.get("user_pains", []) or [])),
+    ]
+    lines.append("| 指标 | 数据 |")
+    lines.append("|------|------|")
+    for label, val in m_rows:
+        if val is None or val == "":
+            continue
+        lines.append(f"| {label} | {val} |")
+
+    # 候选商品表
+    if mode == "select" and products:
+        lines.append("")
+        lines.append("## 候选商品")
+        lines.append("| 商品 | 建议售价(USD) | 采购成本(CNY) | 单件净利(USD) | 净利率 | 竞争度(1-5) | 风险提示 |")
+        lines.append("|------|------|------|------|------|------|------|")
+        for p in products:
+            lines.append(
+                "| {name} | {price} | {cost} | {profit} | {margin}% | {comp} | {risk} |".format(
+                    name=p.get("name", ""),
+                    price=p.get("suggested_price_usd", "-"),
+                    cost=p.get("cost_cny", "-"),
+                    profit=p.get("net_profit_usd", "-"),
+                    margin=p.get("net_margin", "-"),
+                    comp=p.get("competition", "-"),
+                    risk="、".join(p.get("risk_tips", []) or []) or "-",
+                )
+            )
+
+    # 推荐结论
+    lines.append("")
+    lines.append("## 推荐")
+    if rec.get("top_pick"):
+        lines.append(f"- 首选：**{rec['top_pick']}**")
+    if rec.get("verdict"):
+        lines.append(f"- 结论：{rec['verdict']}")
+    if rec.get("score") is not None:
+        lines.append(f"- 综合评分：{rec['score']}/10")
+    for label, key in (("理由", "reasons"), ("风险", "risks")):
+        for item in rec.get(key, []) or []:
+            lines.append(f"- {label}：{item}")
+    if rec.get("entry_advice"):
+        lines.append(f"- 切入建议：{rec['entry_advice']}")
+
+    return "\n".join(lines)
 
 
 class AgentOrchestrator:
@@ -167,11 +257,26 @@ class AgentOrchestrator:
         },
     ]
 
-    def __init__(self, user: User, db: AsyncSession):
+    def __init__(
+        self,
+        user: User,
+        db: AsyncSession,
+        on_step: Optional[Callable[[list[dict]], Awaitable[None]]] = None,
+    ):
         self.llm = DeepSeekService()
         self.user = user
         self.db = db
         self.steps: list[dict] = []  # 记录执行步骤
+        self.on_step = on_step  # 步骤进度回调（流式输出用），每完成一步触发
+
+    async def _emit_step(self) -> None:
+        """步骤追加后触发进度回调（流式输出用）。
+
+        回调由执行器注入，把当前已完成的 steps 写入任务的 progress 列，
+        SSE 端点轮询该列实时推送给前端，替代"跑完才出结果"。
+        """
+        if self.on_step:
+            await self.on_step(self.steps)
 
     async def run_react(self, instruction: str, max_rounds: int = 6) -> dict:
         """ReAct 推理循环：思考 → 调用工具 → 观察 → 再思考
@@ -185,7 +290,8 @@ class AgentOrchestrator:
             "1. 如果需要数据分析、选品、抓取、生成等操作，调用相应工具\n"
             "2. 每次调用工具后，根据结果决定下一步\n"
             "3. 任务完成后，用自然语言总结结果给用户\n"
-            "4. 不要编造工具没返回的数据"
+            "4. 不要编造工具没返回的数据\n"
+            "5. 任务完成后，用简短中文总结关键结论，不要重复完整报告内容"
         )
 
         # 对话历史
@@ -225,12 +331,19 @@ class AgentOrchestrator:
                 # 执行工具
                 result = await self._execute_step(func_name, func_args)
                 self.steps.append(result)
+                await self._emit_step()  # 流式输出：每完成一步推送进度
+
+                # 报告类工具只回传 summary，避免模型在最终回答里复述整份报告
+                if func_name in ("select_products", "analyze_category") and result.get("status") == "success":
+                    tool_content = result.get("summary", "")[:1000]
+                else:
+                    tool_content = json.dumps(result, ensure_ascii=False, default=str)[:2000]
 
                 # 把工具结果返回给模型
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.get("id", str(round_num)),
-                    "content": json.dumps(result, ensure_ascii=False, default=str)[:2000],
+                    "content": tool_content,
                 })
 
         # 达到最大轮数
@@ -268,6 +381,7 @@ class AgentOrchestrator:
             params = step.get("params", {})
             step_result = await self._execute_step(action, params)
             self.steps.append(step_result)
+            await self._emit_step()  # 流式输出：每完成一步推送进度
 
             if step_result["status"] == "failed" and step.get("critical", False):
                 break
@@ -361,6 +475,7 @@ class AgentOrchestrator:
             step_result = await self._execute_step(action, step_params)
             step_result["description"] = step_def.get("description", action)
             self.steps.append(step_result)
+            await self._emit_step()  # 流式输出：每完成一步推送进度
 
             # 传递数据到上下文
             data = step_result.get("data") or {}
@@ -500,14 +615,15 @@ class AgentOrchestrator:
         if not url:
             return {"action": "scrape_1688", "status": "failed", "error": "缺少URL"}
 
-        # 从数据库读取 API Key 配置
+        # 从数据库读取 API Key 配置（密文解密后使用）
+        from app.core.crypto import decrypt_value
         from app.models.system_config import SystemConfig
         config_rows = await self.db.execute(
             select(SystemConfig).where(
                 SystemConfig.key.in_(["onebound_api_key", "onebound_api_secret"])
             )
         )
-        sys_config = {row.key: row.value or "" for row in config_rows.scalars().all()}
+        sys_config = {row.key: decrypt_value(row.value or "") for row in config_rows.scalars().all()}
 
         data = await scrape_1688(
             url,
@@ -612,7 +728,7 @@ class AgentOrchestrator:
         }
 
     async def _do_select_products(self, params: dict) -> dict:
-        """选品决策：输入品类，AI 推荐值得做的商品"""
+        """选品决策：输入品类，AI 推荐值得做的商品（输出结构化 JSON + 模板 Markdown）"""
         from app.services.ai.deepseek import DeepSeekService
 
         keyword = params.get("keyword") or params.get("category") or params.get("query", "")
@@ -621,45 +737,87 @@ class AgentOrchestrator:
 
         llm = DeepSeekService()
         try:
-            # 让 AI 生成选品建议（市场分析 + 候选商品 + 利润估算）
-            report = await llm.generate(
-                "你是跨境电商选品专家。根据品类，推荐值得做的商品，给出详细分析和利润估算。",
-                f"分析品类「{keyword}」的选品机会。\n"
-                f"请输出：\n"
-                f"1. 该品类在 Amazon 的市场概况（搜索量、竞争度）\n"
-                f"2. 推荐 5 个值得做的具体商品（子品类/款式）\n"
-                f"3. 每个商品：1688 采购价估算、建议 Amazon 定价、预计利润率、竞争度评估\n"
-                f"4. 最终推荐 TOP 1 商品，说明理由\n"
-                f"5. 给新手的切入建议\n"
-                f"数据用具体数字，Markdown 格式。",
+            # 让 AI 生成选品建议（只输出 JSON，后端解析为结构化数据 + 模板渲染 Markdown）
+            raw = await llm.generate(
+                "你是跨境电商选品专家。只输出一个 JSON 对象，不要 markdown，不要 ``` 围栏，不要任何解释文字。所有字段值（商品名、痛点、风险、理由等）一律用中文。",
+                f"分析品类「{keyword}」Amazon US 市场选品机会，返回 JSON：\n"
+                f'{{"market": {{"monthly_search_volume": 数字, "active_listings": 数字, '
+                f'"avg_price_usd": 数字, "head_concentration": 0-100, "competition_level": 1-5, '
+                f'"price_war_level": 1-5, "new_product_survival_rate": 0-100, '
+                f'"user_pains": ["痛点1", "痛点2"]}}, '
+                f'"products": [{{"name": "商品名", "suggested_price_usd": 数字, "cost_cny": 数字, '
+                f'"net_profit_usd": 数字, "net_margin": 0-100, "competition": 1-5, '
+                f'"risk_tips": ["风险1"]}} 共5个], '
+                f'"recommendation": {{"top_pick": "首选商品", "verdict": "结论", "score": 0-10, '
+                f'"reasons": ["理由"], "risks": ["风险"], "entry_advice": "切入建议"}}}} '
+                f"数据用具体合理数字。",
                 max_tokens=4000,
+                temperature=0.3,
             )
 
-            # 额外算一个简化的推荐摘要
-            summary = f"已完成「{keyword}」选品分析，推荐 5 个候选商品，含利润估算"
-            return {
-                "action": "select_products",
-                "status": "success",
-                "data": {"keyword": keyword, "report": report},
-                "summary": summary,
-            }
+            structured = _extract_json(raw)
+            if structured:
+                data = {
+                    "keyword": keyword,
+                    "structured": structured,
+                    "report": _render_report_markdown(structured, keyword, mode="select"),
+                }
+                summary = f"已完成「{keyword}」选品分析，推荐 {len(structured.get('products', []) or [])} 个候选商品，含利润估算"
+            else:
+                # 解析失败：降级为原始文本，不中断
+                data = {
+                    "keyword": keyword,
+                    "structured": None,
+                    "report": raw.strip() or f"「{keyword}」选品分析完成",
+                }
+                summary = f"已完成「{keyword}」选品分析（数据解析降级）"
+
+            return {"action": "select_products", "status": "success", "data": data, "summary": summary}
         except Exception as e:
             return {"action": "select_products", "status": "failed", "error": str(e)}
 
     async def _do_analyze_category(self, params: dict) -> dict:
-        """品类分析"""
+        """品类分析（输出结构化 JSON + 模板 Markdown，与选品共用同一 schema）"""
         from app.services.ai.deepseek import DeepSeekService
         keyword = params.get("keyword") or params.get("category") or params.get("query", "")
         if not keyword:
             return {"action": "analyze_category", "status": "failed", "error": "缺少品类关键词"}
         try:
             llm = DeepSeekService()
-            report = await llm.generate(
-                "你是一个跨境电商数据分析师。输出结构化市场分析报告，数据具体合理。",
-                f"分析品类「{keyword}」Amazon US市场：1.市场概览（搜索量、商品数、均价）2.价格分布 3.竞争格局 4.用户痛点Top3 5.1688到Amazon利润模型 6.选品建议和评分。数据用具体数字。",
+            raw = await llm.generate(
+                "你是跨境电商数据分析师。只输出一个 JSON 对象，不要 markdown，不要 ``` 围栏，不要任何解释文字。所有字段值（商品名、痛点、风险、理由等）一律用中文。",
+                f"分析品类「{keyword}」Amazon US 市场，返回 JSON：\n"
+                f'{{"market": {{"monthly_search_volume": 数字, "active_listings": 数字, '
+                f'"avg_price_usd": 数字, "head_concentration": 0-100, "competition_level": 1-5, '
+                f'"price_war_level": 1-5, "new_product_survival_rate": 0-100, '
+                f'"user_pains": ["用户痛点1", "用户痛点2", "用户痛点3"]}}, '
+                f'"products": [], '
+                f'"recommendation": {{"top_pick": "首选切入方向", "verdict": "能不能做的结论", '
+                f'"score": 0-10, "reasons": ["理由"], "risks": ["风险"], '
+                f'"entry_advice": "切入建议"}}}} '
+                f"数据用具体合理数字。",
                 max_tokens=4000,
+                temperature=0.3,
             )
-            return {"action": "analyze_category", "status": "success", "data": {"report": report}, "summary": f"{keyword} 市场分析完成"}
+
+            structured = _extract_json(raw)
+            if structured:
+                data = {
+                    "keyword": keyword,
+                    "structured": structured,
+                    "report": _render_report_markdown(structured, keyword, mode="category"),
+                }
+                summary = f"「{keyword}」市场分析完成"
+            else:
+                # 解析失败：降级为原始文本，不中断
+                data = {
+                    "keyword": keyword,
+                    "structured": None,
+                    "report": raw.strip() or f"「{keyword}」市场分析完成",
+                }
+                summary = f"「{keyword}」市场分析完成（数据解析降级）"
+
+            return {"action": "analyze_category", "status": "success", "data": data, "summary": summary}
         except Exception as e:
             return {"action": "analyze_category", "status": "failed", "error": str(e)}
 

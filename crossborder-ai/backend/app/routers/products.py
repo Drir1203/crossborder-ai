@@ -22,6 +22,7 @@ from app.core.rate_limit import RateLimit
 from app.core.redis import cache, cache_clear
 from app.dependencies import get_current_user
 from app.models.product import Product
+from app.core.crypto import decrypt_value
 from app.models.system_config import SystemConfig
 from app.models.user import User
 from app.services.scraper import scrape_1688
@@ -78,8 +79,8 @@ class ProductListResponse(BaseModel):
 async def scrape_product(
     payload: ScrapeRequest,
     request: Request,
-    _ratelimit=Depends(RateLimit("scrape")),
     current_user: User = Depends(get_current_user),
+    _ratelimit=Depends(RateLimit("scrape")),
     db: AsyncSession = Depends(get_db),
 ):
     """抓取 1688 商品（自动）
@@ -97,7 +98,8 @@ async def scrape_product(
             SystemConfig.key.in_(["onebound_api_key", "onebound_api_secret"])
         )
     )
-    sys_config = {row.key: row.value or "" for row in config_rows.scalars().all()}
+    # 密文解密后传给抓取器（设置页写入时已加密）
+    sys_config = {row.key: decrypt_value(row.value or "") for row in config_rows.scalars().all()}
 
     # ── 查重 ───────────────────────────────────────────────
     # 检查是否已抓取过这个 URL

@@ -95,8 +95,9 @@ location /assets/ {     root /var/www/veyaship; expires 1y; }                   
 │  ② pip install（后端依赖）    │
 │  ③ npm ci + vite build（前端）│
 │  ④ cp 构建产物 → nginx 目录   │
-│  ⑤ systemctl restart 后端    │
-│  ⑥ 健康检查（最多等 120s）    │
+│  ⑤ alembic upgrade head（迁移）│
+│  ⑥ systemctl restart 后端    │
+│  ⑦ 健康检查（最多等 120s）    │
 └─────────────────────────────┘
               │
               ▼
@@ -154,10 +155,16 @@ npm run build        # vite build
 rm -rf /var/www/veyaship/*
 cp -r dist/* /var/www/veyaship/
 
-# ⑤ 重启后端
+# ⑤ 数据库迁移（必须：否则模型变更后 schema 与代码漂移，接口直接 500）
+#    alembic upgrade head 是幂等的，每次部署执行只应用未执行的迁移；
+#    首次部署（create_all 已建表但无 alembic_version）会失败 → 兜底 stamp head
+cd /opt/veyaship/crossborder-ai/backend
+./venv/bin/alembic upgrade head || ./venv/bin/alembic stamp head
+
+# ⑥ 重启后端
 systemctl restart veyaship-backend.service
 
-# ⑥ 健康检查：服务器启动慢，最多等 120s，确保部署成功才报"完成"
+# ⑦ 健康检查：服务器启动慢，最多等 120s，确保部署成功才报"完成"
 for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
   sleep 10
   curl -sf http://localhost:8000/health && exit 0

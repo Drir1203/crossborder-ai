@@ -85,8 +85,8 @@ async def generate_listing(
     payload: GenerateRequest,
     request: Request,
     # RateLimit("ai_generate") 限制 AI 生成频率：10 次/分钟
-    _ratelimit=Depends(RateLimit("ai_generate")),
     current_user: User = Depends(get_current_user),
+    _ratelimit=Depends(RateLimit("ai_generate")),
     db: AsyncSession = Depends(get_db),
 ):
     """【核心】AI 根据商品数据自动生成 Listing 内容
@@ -290,8 +290,8 @@ async def generate_listing(
 async def generate_a_plus(
     payload: GenerateRequest,
     request: Request,
-    _ratelimit=Depends(RateLimit("ai_generate")),
     current_user: User = Depends(get_current_user),
+    _ratelimit=Depends(RateLimit("ai_generate")),
     db: AsyncSession = Depends(get_db),
 ):
     """生成 A+ 内容（带格式的图文商品详情）

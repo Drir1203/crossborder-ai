@@ -34,6 +34,11 @@ Thumbs.db
 # Database
 *.db
 *.sqlite3
+*.db-shm
+*.db-wal
+
+# Debug dumps（git-bash 崩溃残留，勿提交）
+*.stackdump
 
 # Alembic
 backend/alembic/versions/*.pyc

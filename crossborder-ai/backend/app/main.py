@@ -15,23 +15,29 @@ from sqlalchemy.exc import DataError, IntegrityError
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.observability import (
+    init_sentry,
+    new_request_id,
+    request_id_var,
+    setup_logging,
+)
+from app.models.user import InsufficientCreditsError
 from app.routers import auth, users, products, content, images, billing, shopify, batch, radar, ledger, analytics, agent
 from app.routers import settings as settings_router
 
-# ── 日志配置 ──────────────────────────────────────────────────
+# ── 日志配置（可观测性：所有日志自动携带 request_id）──────────
+setup_logging()
 logger = logging.getLogger("veyaship")
-logger.setLevel(getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter(
-    "[VeyaShip] %(asctime)s | %(levelname)-5s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(handler)
 
 
 # ── 请求日志中间件 ────────────────────────────────────────────
 class RequestLogMiddleware:
-    """记录每个 HTTP 请求的方法、路径、状态码、耗时。"""
+    """记录每个 HTTP 请求的方法、路径、状态码、耗时，并分配 X-Request-ID。
+
+    request_id 写入 asyncio ContextVar，随异步调用自动传播——
+    Agent 循环、定时任务等内部日志都能带上同一 ID，跨步骤可串联。
+    响应头带 X-Request-ID，用户/客服反馈时可用它定位日志。
+    """
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -41,12 +47,19 @@ class RequestLogMiddleware:
             await self.app(scope, receive, send)
             return
 
+        request_id = new_request_id()
+        request_id_var.set(request_id)
         start = time.time()
         method = scope.get("method", "?")
         path = scope.get("path", "?")
 
         async def _send(message):
             if message["type"] == "http.response.start":
+                # 响应头带上 request_id（ASGI headers 是二元组列表）
+                headers = list(message.get("headers", []))
+                headers.append((b"X-Request-ID", request_id.encode()))
+                message["headers"] = headers
+
                 status = message["status"]
                 elapsed = time.time() - start
                 logger.info("%s %s → %d (%.0fms)", method, path, status, elapsed * 1000)
@@ -58,11 +71,16 @@ class RequestLogMiddleware:
             elapsed = time.time() - start
             logger.error("%s %s → ERROR (%dms): %s", method, path, elapsed * 1000, str(exc))
             raise
+        finally:
+            request_id_var.set(None)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print(f"[VeyaShip] v{settings.APP_VERSION} starting...")
+
+    # 配置了 SENTRY_DSN 则接入错误告警（幂等，未配置直接跳过）
+    init_sentry()
 
     # 启动时检查密钥是否已配置
     if not settings.SECRET_KEY:
@@ -100,6 +118,16 @@ app = FastAPI(
 
 
 # ── 全局异常处理器 ────────────────────────────────────────────
+@app.exception_handler(InsufficientCreditsError)
+async def insufficient_credits_handler(request: Request, exc: InsufficientCreditsError) -> JSONResponse:
+    """积分不足 → 402。行级锁下并发扣分触发的 ValueError 不再变 500。"""
+    logger.info("Insufficient credits on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        content={"detail": str(exc)},
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """捕获所有未处理的异常，返回安全错误响应。

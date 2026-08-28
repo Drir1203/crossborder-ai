@@ -23,12 +23,13 @@
 
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
@@ -48,6 +49,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 
 async def get_current_user(
+    request: Request,
     token: str | None = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -117,4 +119,22 @@ async def get_current_user(
             detail="用户不存在",
         )
 
+    # 挂到 request.state，供后续依赖（如 RateLimit）读取，实现按用户粒度限流。
+    # 注意：RateLimit 依赖必须在路由签名里声明在 get_current_user 之后才会先跑到这里。
+    request.state.user = user
     return user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """管理员权限依赖：邮箱必须在 ADMIN_EMAILS 配置里。
+
+    用于套餐升级审批等后台操作。校验在前端只是隐藏入口，
+    真正的权限边界在后端这里强制。
+    """
+    admin_emails = {e.lower() for e in settings.ADMIN_EMAILS}
+    if current_user.email.lower() not in admin_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅管理员可执行此操作",
+        )
+    return current_user

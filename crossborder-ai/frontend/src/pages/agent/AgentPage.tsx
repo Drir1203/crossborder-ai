@@ -14,10 +14,14 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  ChevronDown,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import Markdown from '@/components/common/Markdown'
+import ProductReportCard from '@/components/agent/ProductReportCard'
+import type { AgentStep } from '@/types'
 import apiClient from '@/api/client'
 
 /**
@@ -31,8 +35,8 @@ import apiClient from '@/api/client'
 interface Message {
   role: 'user' | 'assistant'
   content: string
-  steps?: Array<{ action: string; status: string; summary?: string; error?: string }>
-  actionResults?: Array<{ action: string; status: string; summary?: string; error?: string }>
+  steps?: AgentStep[]
+  actionResults?: AgentStep[]
   timestamp: Date
 }
 
@@ -43,6 +47,31 @@ const QUICK_ACTIONS = [
   { icon: DollarSign, label: '计算利润', prompt: '售价$19.99，成本¥30，运费¥15，帮我算净利' },
   { icon: Globe, label: '合规检查', prompt: '检查这段文本有没有违禁词：' },
 ]
+
+// ── 任务轮询（异步执行：POST 立即返回 task_id，前端轮询拿结果） ──
+const TASK_POLL_INTERVAL_MS = 2000 // 每 2 秒查一次任务状态
+const TASK_TIMEOUT_MS = 3 * 60 * 1000 // 3 分钟超时
+
+// 生成幂等键：防网络重试 / 用户重复点击导致双扣积分、双建对话
+function genIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+// 轮询任务直到 succeeded / failed / 超时
+async function pollTaskStatus(taskId: string): Promise<any> {
+  const deadline = Date.now() + TASK_TIMEOUT_MS
+  for (;;) {
+    const r = await apiClient.get(`/agent/tasks/${taskId}`)
+    const t = r.data
+    if (t.status === 'succeeded') return t
+    if (t.status === 'failed') throw new Error(t.error || '任务执行失败，请重试')
+    if (Date.now() >= deadline) throw new Error('任务执行超时，请稍后到对话历史查看结果')
+    await new Promise((resolve) => setTimeout(resolve, TASK_POLL_INTERVAL_MS))
+  }
+}
 
 export default function AgentPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -100,11 +129,15 @@ export default function AgentPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Agent 执行
+  // Agent 执行：POST 提交异步任务（带幂等键防重复扣积分）→ 轮询到 succeeded/failed
   const agentMutation = useMutation({
     mutationFn: async (instruction: string) => {
-      const res = await apiClient.post('/agent/run', { instruction, conversation_id: conversationId })
-      return res.data
+      const res = await apiClient.post(
+        '/agent/run',
+        { instruction, conversation_id: conversationId },
+        { headers: { 'Idempotency-Key': genIdempotencyKey() } },
+      )
+      return pollTaskStatus(res.data.task_id)
     },
     onSuccess: (data) => {
       if (data.conversation_id) setConversationId(data.conversation_id)
@@ -119,11 +152,13 @@ export default function AgentPage() {
       ])
     },
     onError: (err: any) => {
+      // 轮询抛出的普通 Error 没有 response；后端 HTTP 错误走 detail，都要兜底
+      const detail = err?.response?.data?.detail || err?.message || '执行失败，请重试'
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: `❌ ${err?.response?.data?.detail || '执行失败，请重试'}`,
+          content: `❌ ${detail}`,
           timestamp: new Date(),
         },
       ])
@@ -150,6 +185,12 @@ export default function AgentPage() {
   // 渲染消息
   const renderMessage = (msg: Message, i: number) => {
     const isUser = msg.role === 'user'
+    // 报告卡片步骤：所有带结构化数据的步骤都渲染为数据卡（品类分析 + 选品可并存）；
+    // 历史消息的完整报告折叠为"文字版"
+    const reportSteps = (msg.actionResults || []).filter((s) => s.data?.structured != null)
+    const plainSteps = (msg.actionResults || []).filter((s) => s.data?.structured == null)
+    const hasReportCard = reportSteps.length > 0
+    const collapseText = hasReportCard && msg.content.length > 400
     return (
       <motion.div
         key={i}
@@ -166,18 +207,36 @@ export default function AgentPage() {
 
         {/* 消息内容 */}
         <div className={`max-w-[80%] space-y-2 ${isUser ? 'items-end' : ''}`}>
-          <div className={`rounded-2xl px-4 py-3 text-sm ${
-            isUser
-              ? 'bg-primary text-primary-foreground rounded-tr-[4px]'
-              : 'bg-muted rounded-tl-[4px]'
-          }`}>
-            <div className="whitespace-pre-wrap">{msg.content}</div>
-          </div>
+          {collapseText ? (
+            // 长报告折叠：独立浅色容器承载文字版，避免灰色气泡上灰上加灰看不清
+            <details className="group rounded-xl bg-background border border-primary/10 px-4 py-3">
+              <summary className="cursor-pointer select-none text-xs text-primary flex items-center gap-1">
+                <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
+                查看文字版报告
+              </summary>
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <Markdown content={msg.content} />
+              </div>
+            </details>
+          ) : (
+            <div className={`rounded-2xl px-4 py-3 text-sm ${
+              isUser
+                ? 'bg-primary text-primary-foreground rounded-tr-[4px]'
+                : 'bg-muted rounded-tl-[4px]'
+            }`}>
+              <Markdown content={msg.content} />
+            </div>
+          )}
 
-          {/* 执行步骤 */}
-          {msg.actionResults && msg.actionResults.length > 0 && (
+          {/* 结构化报告卡片（品类分析 + 选品可并存，逐张渲染） */}
+          {reportSteps.map((step, idx) => (
+            <ProductReportCard key={idx} report={step.data!.structured!} />
+          ))}
+
+          {/* 执行步骤（非报告步骤） */}
+          {plainSteps.length > 0 && (
             <Card className="p-3 space-y-2 text-sm bg-background border">
-              {msg.actionResults.map((step, j) => (
+              {plainSteps.map((step, j) => (
                 <div key={j} className="flex items-start gap-2">
                   {step.status === 'success' ? (
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
@@ -286,6 +345,8 @@ function actionLabel(action: string): string {
     generate_listing: 'AI 生成 Listing',
     compliance_check: '合规审查',
     calculate_profit: '净利计算',
+    select_products: 'AI 选品',
+    analyze_category: '品类市场分析',
     answer: '回答',
   }
   return labels[action] || action

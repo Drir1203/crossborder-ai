@@ -9,6 +9,7 @@ import SettingsPage from '@/pages/settings/SettingsPage'
 import LandingPage from '@/pages/landing/LandingPage'
 import ContentPage from '@/pages/content/ContentPage'
 import BillingPage from '@/pages/billing/BillingPage'
+import AdminUpgradesPage from '@/pages/billing/AdminUpgradesPage'
 import ShopifyPage from '@/pages/shopify/ShopifyPage'
 import BatchPage from '@/pages/batch/BatchPage'
 import RadarPage from '@/pages/radar/RadarPage'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="radar" element={<RadarPage />} />
         <Route path="ledger" element={<LedgerPage />} />
         <Route path="billing" element={<BillingPage />} />
+        <Route path="admin/upgrades" element={<AdminUpgradesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

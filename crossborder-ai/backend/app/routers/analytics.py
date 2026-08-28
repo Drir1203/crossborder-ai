@@ -140,8 +140,8 @@ async def get_store_check_history(
 @router.post("/store-check")
 async def run_store_check(
     request: Request,
-    _ratelimit=Depends(RateLimit("ai_generate")),
     current_user: User = Depends(get_current_user),
+    _ratelimit=Depends(RateLimit("ai_generate")),
     db: AsyncSession = Depends(get_db),
 ):
     """手动触发整店巡检：检查当前用户所有商品，记录结果"""

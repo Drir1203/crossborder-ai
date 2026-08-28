@@ -33,8 +33,8 @@ EXPECTED_HEADERS = ["title", "url", "price", "description"]
 @router.post("/upload")
 async def upload_csv(
     file: UploadFile = File(..., description="CSV 文件，含标题头：title, url, price, description"),
-    _ratelimit=Depends(RateLimit("batch")),
     current_user: User = Depends(get_current_user),
+    _ratelimit=Depends(RateLimit("batch")),
     db: AsyncSession = Depends(get_db),
 ):
     """上传 CSV 文件，解析后创建批量任务。

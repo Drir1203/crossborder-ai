@@ -29,13 +29,15 @@ async def scrape_competitor(
     供卖家做竞品对比分析。
     """
     try:
+        from app.core.crypto import decrypt_value
         from app.models.system_config import SystemConfig
         from sqlalchemy import select
 
         config_rows = await db.execute(
             select(SystemConfig).where(SystemConfig.key.in_(["onebound_api_key", "onebound_api_secret"]))
         )
-        sys_config = {row.key: row.value or "" for row in config_rows.scalars().all()}
+        # 密文解密后传给抓取器（设置页写入时已加密）
+        sys_config = {row.key: decrypt_value(row.value or "") for row in config_rows.scalars().all()}
 
         data = await scrape_1688(
             url,

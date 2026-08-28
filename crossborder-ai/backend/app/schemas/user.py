@@ -20,6 +20,8 @@ class UserResponse(BaseModel):
     credits: int
     plan: str
     created_at: datetime
+    # 管理员标记：邮箱在 ADMIN_EMAILS 配置里，前端据此显示后台管理入口
+    is_admin: bool = False
 
     model_config = {"from_attributes": True}
 

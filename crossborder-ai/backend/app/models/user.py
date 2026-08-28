@@ -14,6 +14,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 
+class InsufficientCreditsError(ValueError):
+    """积分不足异常（ValueError 子类）。
+
+    兼容旧调用方（users.py 用 ``except ValueError`` 捕获 → 400），
+    同时在 main.py 注册全局处理器 → 其余调用点统一返回 402。
+    """
+
+
 class User(Base):
     """用户表 —— 存储账号、积分、套餐信息
 
@@ -97,7 +105,7 @@ class User(Base):
             user = result.scalar_one()
 
             if user.credits < amount:
-                raise ValueError(f"积分不足，需要 {amount}，当前 {user.credits}")
+                raise InsufficientCreditsError(f"积分不足，需要 {amount}，当前 {user.credits}")
 
             user.credits -= amount
             await db.flush()  # 刷新到数据库（但还没提交）

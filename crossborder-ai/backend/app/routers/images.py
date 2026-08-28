@@ -87,8 +87,8 @@ async def _run_generation(task_id: str, prompt: str, num_outputs: int):
 async def generate_image(
     payload: GenerateImageRequest,
     request: Request,
-    _ratelimit=Depends(RateLimit("ai_generate")),
     current_user: User = Depends(get_current_user),
+    _ratelimit=Depends(RateLimit("ai_generate")),
     db: AsyncSession = Depends(get_db),
 ):
     """提交图片生成任务（异步，立即返回 task_id）

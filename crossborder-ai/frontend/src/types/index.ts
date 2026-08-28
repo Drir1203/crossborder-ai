@@ -20,9 +20,10 @@ export interface User {
   shopify_shop_name: string | null
   created_at: string
   updated_at: string
+  is_admin?: boolean
 }
 
-export type UserPlan = 'free' | 'starter' | 'professional' | 'enterprise'
+export type UserPlan = 'free' | 'standard' | 'starter' | 'professional' | 'enterprise'
 
 export interface LoginRequest {
   email: string
@@ -292,3 +293,6 @@ export interface PaginationParams {
   page?: number
   page_size?: number
 }
+
+// --- Agent 结构化报告 ---
+export * from './agent'

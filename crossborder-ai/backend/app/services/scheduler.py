@@ -4,15 +4,19 @@ APScheduler-based periodic tasks for data synchronization,
 credit management, and cleanup operations.
 """
 
-from datetime import datetime, timezone
+import asyncio
+import hashlib
+
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import async_session_factory
+from app.core.config import settings
+from app.core.database import async_session_factory, engine
 from app.models.payment import Subscription, SubscriptionStatus
 from app.models.user import User
 
@@ -27,7 +31,7 @@ class SchedulerService:
         """Register and start all scheduled tasks."""
         # Daily credit reset for expired subscriptions
         self.scheduler.add_job(
-            self._expire_subscriptions,
+            self._expire_subscriptions_locked,
             CronTrigger(hour=0, minute=0),  # Midnight daily
             id="expire_subscriptions",
             replace_existing=True,
@@ -51,14 +55,61 @@ class SchedulerService:
 
         # Daily store check: 定时整店巡检
         self.scheduler.add_job(
-            self._run_store_checks,
+            self._run_store_checks_locked,
             CronTrigger(hour=2, minute=30),  # 每天凌晨 2:30
             id="store_check_daily",
             replace_existing=True,
         )
 
+        # Every 5 seconds: 分发 Agent 异步任务（任务队列核心）
+        # 在跨进程锁内抢占 pending 任务，锁外并发执行，多 worker 不重复消费
+        self.scheduler.add_job(
+            self._dispatch_agent_tasks,
+            IntervalTrigger(seconds=5),
+            id="dispatch_agent_tasks",
+            replace_existing=True,
+        )
+
         self.scheduler.start()
         print("[Scheduler] started with all jobs registered")
+
+    async def _run_with_lock(self, lock_key: str, job):
+        """在跨进程锁下执行 job，防止多 worker 重复执行。
+
+        生产是 uvicorn 4 worker，每个 worker 各跑一份 APScheduler。
+        不加锁时，凌晨 2:30 的整店巡检会在 4 个 worker 各写一份
+        StoreCheckLog → 重复数据。用 PostgreSQL advisory lock 保证
+        同一时刻只有一个 worker 真正执行 job。
+
+        SQLite 开发模式单进程，无需锁，直接执行。
+        """
+        if settings.USE_SQLITE:
+            return await job()
+
+        # 确定性 64 位锁 key（md5 前 8 字节，advisory lock 用 bigint）
+        lock_id = int.from_bytes(hashlib.md5(lock_key.encode()).digest()[:8], "big")
+        # 独立连接持有锁，直到 job 结束才释放（session 级 advisory lock）
+        async with engine.connect() as conn:
+            got = (await conn.execute(
+                text("SELECT pg_try_advisory_lock(:k)"), {"k": lock_id}
+            )).scalar()
+            if not got:
+                print(f"[Scheduler] 跳过 {lock_key}：其他 worker 正在执行")
+                return None
+            try:
+                return await job()
+            finally:
+                await conn.execute(
+                    text("SELECT pg_advisory_unlock(:k)"), {"k": lock_id}
+                )
+
+    async def _expire_subscriptions_locked(self):
+        """带跨进程锁的订阅过期检查。"""
+        await self._run_with_lock("expire_subscriptions", self._expire_subscriptions)
+
+    async def _run_store_checks_locked(self):
+        """带跨进程锁的定时整店巡检（防 4 worker 重复写巡检记录）。"""
+        await self._run_with_lock("store_check_daily", self._run_store_checks)
 
     async def _run_store_checks(self):
         """定时整店巡检：检查所有用户的商品，记录结果"""
@@ -158,3 +209,72 @@ class SchedulerService:
         # This would be replaced by a proper task queue (Celery/RQ)
         # for production use. For now, it's a placeholder.
         print("[Scheduler] No pending generations to process")
+
+    # ── Agent 异步任务队列 ────────────────────────────────────────
+    # 每 tick 每个 worker 最多抢占的任务数；4 worker 下并发上限约 4×4
+    async def _dispatch_agent_tasks(self):
+        """分发待执行的 Agent 任务：锁内抢占，锁外并发执行。"""
+        claimed = await self._run_with_lock("dispatch_agent_tasks", self._claim_agent_tasks)
+        if claimed:
+            await asyncio.gather(*[self._execute_claimed_task(t) for t in claimed])
+
+    async def _claim_agent_tasks(self):
+        """在跨进程锁内抢占 pending 任务为 running，并恢复僵尸任务。
+
+        锁只覆盖抢占这一步（毫秒级），真正的 Agent 执行在锁外并发跑，
+        避免长任务占锁导致其他 worker 空等。
+
+        顺序必须是「先抢 pending，再恢复僵尸」：若先恢复（status 置回
+        pending）再抢，同一事务内 autoflush 会让刚恢复的僵尸任务在本
+        tick 立即被抢回 running → 立即重跑，慢任务会被并发执行两次、
+        扣两次积分。恢复的任务 commit 成 pending 后，下一 tick 才被抢占。
+        """
+        from app.models.agent_task import AgentTask
+
+        async with async_session_factory() as db:
+            now = datetime.now(timezone.utc)
+
+            # 先抢占 pending（FOR UPDATE 行锁；advisory lock 已保证单 worker 抢占）
+            result = await db.execute(
+                select(AgentTask)
+                .where(AgentTask.status == "pending")
+                .order_by(AgentTask.created_at)
+                .limit(4)
+                .with_for_update()
+            )
+            claimed = result.scalars().all()
+            for t in claimed:
+                t.status = "running"
+                t.started_at = now
+
+            # 再恢复僵尸任务：worker 重启后任务会滞留 running。
+            # running 超过 10 分钟 → 重新置回 pending（attempt+1），重试满 3 次 → failed。
+            # 阈值取 10 分钟：慢任务（ReAct 多轮 DeepSeek 调用）通常 1-3 分钟，
+            # 5 分钟易误判；真卡死的任务最多晚 10 分钟被重试。
+            stale_result = await db.execute(
+                select(AgentTask).where(
+                    AgentTask.status == "running",
+                    AgentTask.started_at < now - timedelta(minutes=10),
+                )
+            )
+            for t in stale_result.scalars().all():
+                if t.attempt >= 2:
+                    t.status = "failed"
+                    t.error = "执行超时，任务已终止，请重试"
+                    t.finished_at = now
+                else:
+                    t.status = "pending"
+                    t.attempt += 1
+                    t.started_at = None
+
+            await db.commit()
+            return claimed
+
+    async def _execute_claimed_task(self, task):
+        """执行单个已抢占任务。异常只记日志，不拖垮调度器。"""
+        from app.services.agent_task_executor import execute_agent_task
+
+        try:
+            await execute_agent_task(task.id)
+        except Exception as e:
+            print(f"[Scheduler] Agent 任务执行异常：{e}")

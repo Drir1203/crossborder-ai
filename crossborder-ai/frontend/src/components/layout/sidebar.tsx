@@ -19,10 +19,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/stores/authStore'
 import { useState } from 'react'
+import { ShieldCheck } from 'lucide-react'
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
   const [collapsed, setCollapsed] = useState(false)
 
   const navItems = [
@@ -34,6 +37,9 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     { icon: Upload, label: t('nav.batch'), path: '/app/batch' },
     { icon: Globe, label: t('nav.shopify'), path: '/app/shopify' },
     { icon: CreditCard, label: t('nav.billing'), path: '/app/billing' },
+    ...(user?.is_admin
+      ? [{ icon: ShieldCheck, label: '升级审核', path: '/app/admin/upgrades' }]
+      : []),
     { icon: Settings, label: t('nav.settings'), path: '/app/settings' },
   ]
 
