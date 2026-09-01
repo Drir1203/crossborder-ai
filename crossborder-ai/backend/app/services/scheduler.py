@@ -12,13 +12,11 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import async_session_factory, engine
-from app.models.payment import Subscription, SubscriptionStatus
-from app.models.user import User
 
 
 class SchedulerService:
@@ -29,14 +27,6 @@ class SchedulerService:
 
     async def start(self):
         """Register and start all scheduled tasks."""
-        # Daily credit reset for expired subscriptions
-        self.scheduler.add_job(
-            self._expire_subscriptions_locked,
-            CronTrigger(hour=0, minute=0),  # Midnight daily
-            id="expire_subscriptions",
-            replace_existing=True,
-        )
-
         # Weekly cleanup of old generation records
         self.scheduler.add_job(
             self._cleanup_old_records,
@@ -86,8 +76,10 @@ class SchedulerService:
         if settings.USE_SQLITE:
             return await job()
 
-        # 确定性 64 位锁 key（md5 前 8 字节，advisory lock 用 bigint）
-        lock_id = int.from_bytes(hashlib.md5(lock_key.encode()).digest()[:8], "big")
+        # 确定性 64 位锁 key（md5 前 8 字节）。
+        # 必须按「有符号 bigint」解析：advisory lock 用 PG int8（上限 2^63-1），
+        # 无符号解析会有约一半 key 落在上界 → asyncpg 报 value out of int64 range。
+        lock_id = int.from_bytes(hashlib.md5(lock_key.encode()).digest()[:8], "big", signed=True)
         # 独立连接持有锁，直到 job 结束才释放（session 级 advisory lock）
         async with engine.connect() as conn:
             got = (await conn.execute(
@@ -102,10 +94,6 @@ class SchedulerService:
                 await conn.execute(
                     text("SELECT pg_advisory_unlock(:k)"), {"k": lock_id}
                 )
-
-    async def _expire_subscriptions_locked(self):
-        """带跨进程锁的订阅过期检查。"""
-        await self._run_with_lock("expire_subscriptions", self._expire_subscriptions)
 
     async def _run_store_checks_locked(self):
         """带跨进程锁的定时整店巡检（防 4 worker 重复写巡检记录）。"""
@@ -169,34 +157,6 @@ class SchedulerService:
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
             print("[Scheduler] stopped")
-
-    async def _expire_subscriptions(self):
-        """Expire subscriptions that have passed their end date."""
-        async with async_session_factory() as db:
-            now = datetime.now(timezone.utc)
-            result = await db.execute(
-                select(Subscription).where(
-                    Subscription.current_period_end < now,
-                    Subscription.is_active == True,
-                    Subscription.status == SubscriptionStatus.ACTIVE,
-                )
-            )
-            expired = result.scalars().all()
-
-            for sub in expired:
-                sub.is_active = False
-                sub.status = SubscriptionStatus.EXPIRED
-
-                # Downgrade user to free plan
-                await db.execute(
-                    update(User)
-                    .where(User.id == sub.user_id)
-                    .values(plan="free", credits=10)
-                )
-
-            if expired:
-                await db.commit()
-                print(f"[Scheduler] Expired {len(expired)} subscriptions")
 
     async def _cleanup_old_records(self):
         """Clean up content generation records older than 90 days."""
