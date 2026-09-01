@@ -22,7 +22,8 @@ import { Badge } from '@/components/ui/badge'
 import Markdown from '@/components/common/Markdown'
 import ProductReportCard from '@/components/agent/ProductReportCard'
 import type { AgentStep } from '@/types'
-import apiClient from '@/api/client'
+import apiClient, { API_BASE } from '@/api/client'
+import { readSseUntil, TaskTimeoutError } from '@/api/sse'
 
 /**
  * AgentPage - AI 智能助手聊天页
@@ -48,9 +49,9 @@ const QUICK_ACTIONS = [
   { icon: Globe, label: '合规检查', prompt: '检查这段文本有没有违禁词：' },
 ]
 
-// ── 任务轮询（异步执行：POST 立即返回 task_id，前端轮询拿结果） ──
-const TASK_POLL_INTERVAL_MS = 2000 // 每 2 秒查一次任务状态
-const TASK_TIMEOUT_MS = 3 * 60 * 1000 // 3 分钟超时
+// ── 任务进度：SSE 实时推流（替代 2s 轮询），连接失败自动回退轮询 ──
+const TASK_POLL_INTERVAL_MS = 2000 // 轮询兜底：每 2 秒查一次任务状态
+const TASK_TIMEOUT_MS = 3 * 60 * 1000 // 3 分钟总超时（SSE 与轮询共用）
 
 // 生成幂等键：防网络重试 / 用户重复点击导致双扣积分、双建对话
 function genIdempotencyKey(): string {
@@ -60,7 +61,7 @@ function genIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-// 轮询任务直到 succeeded / failed / 超时
+// 轮询兜底：SSE 连接失败 / 流中断时回退（与原逻辑一致）
 async function pollTaskStatus(taskId: string): Promise<any> {
   const deadline = Date.now() + TASK_TIMEOUT_MS
   for (;;) {
@@ -70,6 +71,38 @@ async function pollTaskStatus(taskId: string): Promise<any> {
     if (t.status === 'failed') throw new Error(t.error || '任务执行失败，请重试')
     if (Date.now() >= deadline) throw new Error('任务执行超时，请稍后到对话历史查看结果')
     await new Promise((resolve) => setTimeout(resolve, TASK_POLL_INTERVAL_MS))
+  }
+}
+
+// 主路径：SSE 订阅任务流。event:step 实时回调累积步骤；event:done 收最终结果。
+// 失败（done.status=failed）抛错走 onError；超时抛超时；连接失败回退轮询。
+async function streamTaskStatus(
+  taskId: string,
+  onProgress: (steps: AgentStep[]) => void,
+): Promise<any> {
+  const url = `${API_BASE}/agent/tasks/${taskId}/stream`
+  try {
+    const payload = await readSseUntil(url, {
+      timeoutMs: TASK_TIMEOUT_MS,
+      onEvent: (ev) => {
+        if (ev.event === 'step') {
+          onProgress(((ev.data as { steps?: AgentStep[] })?.steps) || [])
+          return false
+        }
+        return ev.event === 'done' // 收到 done 停止流，返回最终 payload
+      },
+    })
+    const t = payload as { status?: string; error?: string }
+    if (t.status === 'failed') {
+      throw new Error(t.error || '任务执行失败，请重试')
+    }
+    return payload
+  } catch (err) {
+    if (err instanceof TaskTimeoutError) {
+      throw new Error('任务执行超时，请稍后到对话历史查看结果')
+    }
+    // SSE 连接失败（网络/鉴权/流中断）→ 回退轮询兜底
+    return pollTaskStatus(taskId)
   }
 }
 
@@ -83,6 +116,7 @@ export default function AgentPage() {
   ])
   const [input, setInput] = useState('')
   const [conversationId, setConversationId] = useState<string>('')
+  const [liveSteps, setLiveSteps] = useState<AgentStep[]>([]) // SSE 实时推进度
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // 加载最近的对话
@@ -129,7 +163,8 @@ export default function AgentPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Agent 执行：POST 提交异步任务（带幂等键防重复扣积分）→ 轮询到 succeeded/failed
+  // Agent 执行：POST 提交异步任务（带幂等键防重复扣积分）→ SSE 实时推进度，
+  // 连接失败自动回退轮询到 succeeded/failed
   const agentMutation = useMutation({
     mutationFn: async (instruction: string) => {
       const res = await apiClient.post(
@@ -137,9 +172,10 @@ export default function AgentPage() {
         { instruction, conversation_id: conversationId },
         { headers: { 'Idempotency-Key': genIdempotencyKey() } },
       )
-      return pollTaskStatus(res.data.task_id)
+      return streamTaskStatus(res.data.task_id, setLiveSteps)
     },
     onSuccess: (data) => {
+      setLiveSteps([]) // 任务结束，实时步骤已落入消息 actionResults
       if (data.conversation_id) setConversationId(data.conversation_id)
       setMessages((prev) => [
         ...prev,
@@ -152,6 +188,7 @@ export default function AgentPage() {
       ])
     },
     onError: (err: any) => {
+      setLiveSteps([])
       // 轮询抛出的普通 Error 没有 response；后端 HTTP 错误走 detail，都要兜底
       const detail = err?.response?.data?.detail || err?.message || '执行失败，请重试'
       setMessages((prev) => [
@@ -171,6 +208,7 @@ export default function AgentPage() {
 
     // 添加用户消息
     setMessages((prev) => [...prev, { role: 'user', content: msg, timestamp: new Date() }])
+    setLiveSteps([]) // 新一轮任务，清空上一轮实时步骤
     setInput('')
 
     // 执行 Agent
@@ -267,7 +305,7 @@ export default function AgentPage() {
           {messages.map((msg, i) => renderMessage(msg, i))}
         </AnimatePresence>
 
-        {/* 加载中 */}
+        {/* 加载中：SSE 实时推进度，无进度时仅显示 spinner */}
         {agentMutation.isPending && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -277,11 +315,33 @@ export default function AgentPage() {
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500">
               <Bot className="h-4 w-4 text-white" />
             </div>
-            <div className="bg-muted rounded-2xl rounded-tl-[4px] px-4 py-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                正在分析并执行...
+            <div className="flex-1 space-y-2">
+              <div className="bg-muted rounded-2xl rounded-tl-[4px] px-4 py-3 w-fit">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  正在分析并执行...
+                </div>
               </div>
+              {liveSteps.length > 0 && (
+                <Card className="p-3 space-y-2 text-sm bg-background border">
+                  {liveSteps.map((step, j) => (
+                    <div key={j} className="flex items-start gap-2">
+                      {step.status === 'success' ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                      ) : step.status === 'failed' ? (
+                        <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                      ) : (
+                        <Loader2 className="h-4 w-4 animate-spin mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <span className="font-medium text-xs">{actionLabel(step.action)}</span>
+                        {step.summary && <p className="text-xs text-muted-foreground">{step.summary}</p>}
+                        {step.error && <p className="text-xs text-destructive">{step.error}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </Card>
+              )}
             </div>
           </motion.div>
         )}
