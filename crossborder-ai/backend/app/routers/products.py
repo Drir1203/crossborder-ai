@@ -19,13 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.rate_limit import RateLimit
-from app.core.redis import cache, cache_clear
+from app.core.redis import cache_clear
 from app.dependencies import get_current_user
 from app.models.product import Product
+from app.core.config import settings
 from app.core.crypto import decrypt_value
 from app.models.system_config import SystemConfig
 from app.models.user import User
-from app.services.scraper import scrape_1688
+from app.services.scraper import SERVICE_NOT_CONFIGURED_MSG, ScrapeError, scrape_1688
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -75,6 +76,46 @@ class ProductListResponse(BaseModel):
     total_pages: int  # 总共多少页
 
 
+async def _load_onebound_credentials(db: AsyncSession) -> tuple[str, str]:
+    """读取平台级 Onebound 凭据并解密。
+
+    优先级：SystemConfig（设置页密文存储）> settings（.env 兜底）。
+    Key 对卖家不可见，此处只读不暴露任何明文给前端。
+
+    Returns:
+        (api_key, api_secret)：两者为空串即代表平台未配置数据服务。
+    """
+    config_rows = await db.execute(
+        select(SystemConfig).where(
+            SystemConfig.key.in_(["onebound_api_key", "onebound_api_secret"])
+        )
+    )
+    # 密文解密后传给抓取器（设置页写入时已加密）
+    sys_config = {row.key: decrypt_value(row.value or "") for row in config_rows.scalars().all()}
+
+    api_key = sys_config.get("onebound_api_key", "")
+    api_secret = sys_config.get("onebound_api_secret", "")
+    # .env 兜底（本地/自托管开发）：未在网页配置时才回退
+    if not api_key and settings.ONEBOUND_API_KEY:
+        api_key = settings.ONEBOUND_API_KEY
+        api_secret = settings.ONEBOUND_API_SECRET or api_secret
+    return api_key, api_secret
+
+
+@router.get("/scrape/status")
+async def scrape_service_status(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """平台级 1688 数据服务就绪探针（CAP-01）
+
+    前端据此在 Key 未配置时禁用「自动抓取」按钮并提示联系客服，
+    而不是等卖家点下去才拿到错误。
+    """
+    api_key, _secret = await _load_onebound_credentials(db)
+    return {"configured": bool(api_key)}
+
+
 @router.post("/scrape", status_code=status.HTTP_201_CREATED)
 async def scrape_product(
     payload: ScrapeRequest,
@@ -83,23 +124,22 @@ async def scrape_product(
     _ratelimit=Depends(RateLimit("scrape")),
     db: AsyncSession = Depends(get_db),
 ):
-    """抓取 1688 商品（自动）
+    """抓取 1688 商品（自动，CAP-01：就绪检查 + 错误分类）
 
-    数据库操作流程：
-    1. 从 system_config 表查 API Key（管理员在设置页面配的）
+    流程：
+    1. 就绪检查：平台数据服务 Key 未配置 → 400 中文「联系客服开通」，不发网络请求
     2. 查 products 表是否已抓过（防重复）
-    3. INSERT 新商品
+    3. 扣积分前校验余额
+    4. 调用爬虫（Onebound → 降级直抓），分类错误转 HTTPException（中文 detail）
+    5. 成功扣 1 积分并 INSERT 新商品
     """
-    # ── 跨表查询 ───────────────────────────────────────────
-    # 从 system_config 表读取 API 配置
-    # .key.in_([...]) = SQL 的 WHERE key IN (...)
-    config_rows = await db.execute(
-        select(SystemConfig).where(
-            SystemConfig.key.in_(["onebound_api_key", "onebound_api_secret"])
+    # ── 就绪检查：平台级数据服务 Key（CAP-01 / C1）────────────
+    api_key, api_secret = await _load_onebound_credentials(db)
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "service_not_configured", "message": SERVICE_NOT_CONFIGURED_MSG},
         )
-    )
-    # 密文解密后传给抓取器（设置页写入时已加密）
-    sys_config = {row.key: decrypt_value(row.value or "") for row in config_rows.scalars().all()}
 
     # ── 查重 ───────────────────────────────────────────────
     # 检查是否已抓取过这个 URL
@@ -112,14 +152,20 @@ async def scrape_product(
         raise HTTPException(status_code=402, detail="积分不足")
 
     # ── 调用爬虫（外部服务，不是数据库操作） ────────────────
+    # ScrapeError 已分类：稳定 code + 中文 message，绝不裸抛底层异常给卖家
     try:
-        data = await scrape_1688(
-            payload.url,
-            api_key=sys_config.get("onebound_api_key", ""),
-            api_secret=sys_config.get("onebound_api_secret", ""),
-        )
+        data = await scrape_1688(payload.url, api_key=api_key, api_secret=api_secret)
+    except ScrapeError as e:
+        raise HTTPException(
+            status_code=e.http_status,
+            detail={"code": e.code, "message": e.message},
+        ) from e
     except (ValueError, RuntimeError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # 防御兜底：理论已被 ScrapeError 覆盖，避免意外漏成 500
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "scrape_failed", "message": str(e) or "抓取失败，请稍后重试"},
+        ) from e
 
     # ── 扣积分（修改已有数据） ─────────────────────────────
     await current_user.deduct_credits(db, 1)
@@ -143,6 +189,8 @@ async def scrape_product(
 
     return {
         "message": "抓取成功",
+        # 数据源标注：onebound（数据接口）/ direct（实时抓取降级），供前端提示与统计
+        "data_source": data.get("data_source", "onebound"),
         "product": ProductResponse.model_validate(product).model_dump(),
     }
 
@@ -195,7 +243,12 @@ async def list_products(
         LIMIT ? OFFSET ?
     """
     # ── 构建查询 ─────────────────────────────────────────
-    query = select(Product).order_by(Product.updated_at.desc())
+    # 只查当前用户自己的商品（防跨租户枚举他人商品）
+    query = (
+        select(Product)
+        .where(Product.user_id == current_user.id)
+        .order_by(Product.updated_at.desc())
+    )
 
     # 搜索条件（WHERE title LIKE '%关键词%'）
     if search:
@@ -223,16 +276,17 @@ async def list_products(
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
-@cache(ttl=600)  # 10 分钟缓存，减少重复查询
 async def get_product(
     product_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """查询单个商品详情
+    """查询单个商品详情（仅本人；他人商品按不存在处理）
 
     SQL：
-        SELECT * FROM products WHERE id = ?
+        SELECT * FROM products WHERE id = ? AND owner_id = ?
+
+    注：去掉 @cache —— 原缓存只按 URL 键，跨用户会串数据且与归属校验冲突。
     """
     from uuid import UUID
     try:
@@ -240,7 +294,12 @@ async def get_product(
     except ValueError:
         raise HTTPException(status_code=400, detail="无效的商品 ID")
 
-    result = await db.execute(select(Product).where(Product.id == uid))
+    result = await db.execute(
+        select(Product).where(
+            Product.id == uid,
+            Product.user_id == current_user.id,
+        )
+    )
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
@@ -261,7 +320,13 @@ async def delete_product(
     except ValueError:
         raise HTTPException(status_code=400, detail="无效的商品 ID")
 
-    result = await db.execute(select(Product).where(Product.id == uid))
+    # 归属过滤：他人商品等同不存在，禁止跨租户删除
+    result = await db.execute(
+        select(Product).where(
+            Product.id == uid,
+            Product.user_id == current_user.id,
+        )
+    )
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
@@ -288,7 +353,13 @@ async def batch_delete_products(
     for product_id in payload.ids:
         try:
             uid = UUID(product_id)
-            result = await db.execute(select(Product).where(Product.id == uid))
+            # 归属过滤：只删自己的商品，他人商品自动跳过
+            result = await db.execute(
+                select(Product).where(
+                    Product.id == uid,
+                    Product.user_id == current_user.id,
+                )
+            )
             product = result.scalar_one_or_none()
             if product:
                 await db.delete(product)

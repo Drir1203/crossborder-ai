@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import decrypt_value, encrypt_value, mask_secret
 from app.core.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.models.persona import Persona
 from app.models.system_config import SystemConfig
 from app.models.user import User
@@ -27,9 +27,9 @@ class WhitelistRequest(BaseModel):
 @router.post("/whitelist/add")
 async def add_whitelist(
     payload: WhitelistRequest,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
 ):
-    """添加白名单账号（测试账号不受套餐限制）"""
+    """添加白名单账号（仅管理员；白名单可绕过套餐限制，绝不能开放给普通用户）"""
     from app.core.access_control import add_whitelist as _add
     _add(payload.email)
     return {"message": f"已添加白名单: {payload.email}"}
@@ -38,17 +38,19 @@ async def add_whitelist(
 @router.post("/whitelist/remove")
 async def remove_whitelist(
     payload: WhitelistRequest,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
 ):
-    """移除白名单账号"""
+    """移除白名单账号（仅管理员）"""
     from app.core.access_control import remove_whitelist as _remove
     _remove(payload.email)
     return {"message": f"已移除白名单: {payload.email}"}
 
 
 @router.get("/whitelist")
-async def list_whitelist():
-    """查看所有白名单账号"""
+async def list_whitelist(
+    admin: User = Depends(require_admin),
+):
+    """查看所有白名单账号（仅管理员）"""
     from app.core.access_control import WHITELIST_EMAILS
     return {"emails": list(WHITELIST_EMAILS)}
 
@@ -67,7 +69,7 @@ class ScrapingConfigResponse(BaseModel):
 
 @router.get("/scraping", response_model=ScrapingConfigResponse)
 async def get_scraping_config(
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -84,9 +86,10 @@ async def get_scraping_config(
 @router.put("/scraping", response_model=ScrapingConfigResponse)
 async def update_scraping_config(
     payload: ScrapingConfigRequest,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    # 仅管理员可改全局 Onebound 密钥（任意用户覆写会导致平台级服务不可用/滥用）
     # 落库前加密（Fernet），DB 泄漏时服务商密钥不暴露
     encrypted = {
         "onebound_api_key": encrypt_value(payload.api_key),
@@ -118,6 +121,10 @@ class PersonaRequest(BaseModel):
     tone: str = "professional"
     tone_custom: Optional[str] = Field(None, max_length=500)
     banned_words: list[str] = []
+    # Brand Kit 扩展字段（CAP-04，均可空）
+    target_market: Optional[str] = Field(None, max_length=200, description="目标市场/站点，如 amazon.com、日本站")
+    product_category: Optional[str] = Field(None, max_length=200, description="主营类目")
+    image_style: Optional[str] = Field(None, max_length=500, description="图片风格提示词")
 
 class PersonaResponse(BaseModel):
     brand_name: Optional[str] = None
@@ -126,6 +133,10 @@ class PersonaResponse(BaseModel):
     tone: str = "professional"
     tone_custom: Optional[str] = None
     banned_words: list[str] = []
+    # Brand Kit 扩展字段（CAP-04）
+    target_market: Optional[str] = None
+    product_category: Optional[str] = None
+    image_style: Optional[str] = None
 
 
 @router.get("/persona", response_model=PersonaResponse)
@@ -145,6 +156,9 @@ async def get_persona(
         tone=p.tone,
         tone_custom=p.tone_custom,
         banned_words=json.loads(p.banned_words) if p.banned_words else [],
+        target_market=p.target_market,
+        product_category=p.product_category,
+        image_style=p.image_style,
     )
 
 
@@ -166,6 +180,9 @@ async def update_persona(
     persona.tone = payload.tone
     persona.tone_custom = payload.tone_custom
     persona.banned_words = json.dumps(payload.banned_words, ensure_ascii=False)
+    persona.target_market = payload.target_market
+    persona.product_category = payload.product_category
+    persona.image_style = payload.image_style
     await db.flush()
     return PersonaResponse(
         brand_name=persona.brand_name,
@@ -174,4 +191,7 @@ async def update_persona(
         tone=persona.tone,
         tone_custom=persona.tone_custom,
         banned_words=json.loads(persona.banned_words) if persona.banned_words else [],
+        target_market=persona.target_market,
+        product_category=persona.product_category,
+        image_style=persona.image_style,
     )

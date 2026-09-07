@@ -704,20 +704,28 @@ class AgentOrchestrator:
         if not product:
             return {"action": "generate_listing", "status": "failed", "error": "商品不存在"}
 
+        # 统一品牌档案注入（CAP-04）：编排器生成 Listing 时把用户 Persona 拼入 system prompt
+        from app.services.ai.persona_kit import fetch_persona, build_persona_kit, format_persona_block
+        persona = await fetch_persona(self.db, self.user.id)
+        persona_block = format_persona_block(build_persona_kit(persona)) if persona else ""
+
         llm = DeepSeekService()
         title = await llm.generate(
             f"You are an expert {platform} listing copywriter.",
             f"Generate a compelling product title for {platform} (max 200 chars):\nProduct: {product.title}",
             max_tokens=300,
+            persona_block=persona_block,
         )
         description = await llm.generate_product_description(
             product_title=product.title or "",
             platform=platform,
+            persona_block=persona_block,
         )
         bullets = await llm.generate_bullet_points(
             product_title=product.title or "",
             features=f"Price: {product.price}" if product.price else "",
             platform=platform,
+            persona_block=persona_block,
         )
 
         return {

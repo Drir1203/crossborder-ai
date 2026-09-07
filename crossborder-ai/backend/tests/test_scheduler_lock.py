@@ -42,7 +42,11 @@ async def test_run_with_lock_no_op_job_runs():
 
 @pytest.mark.asyncio
 async def test_locked_wrappers_use_correct_lock_key(monkeypatch):
-    """写数据 job 的包装方法都经过 _run_with_lock，且锁 key 唯一。"""
+    """写数据 job 的包装方法都经过 _run_with_lock，且锁 key 唯一。
+
+    注：订阅过期任务已在 scheduler 重构中随 Subscription 模型移除，
+    当前写数据包装为「定时整店巡检」与「Agent 任务分发」两个。
+    """
     from app.services.scheduler import SchedulerService
 
     svc = SchedulerService()
@@ -53,9 +57,9 @@ async def test_locked_wrappers_use_correct_lock_key(monkeypatch):
 
     monkeypatch.setattr(svc, "_run_with_lock", fake_lock)
 
-    await svc._expire_subscriptions_locked()
     await svc._run_store_checks_locked()
+    await svc._dispatch_agent_tasks()
 
-    assert captured == ["expire_subscriptions", "store_check_daily"]
+    assert captured == ["store_check_daily", "dispatch_agent_tasks"]
     # 两个 job 用不同的锁 key，互不阻塞
     assert len(set(captured)) == 2

@@ -27,6 +27,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.config import settings
@@ -62,32 +63,36 @@ def event_loop():
     loop.close()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def test_engine():
     """创建测试数据库引擎
 
-    scope="session" 表示整个测试过程只创建一次引擎（复用连接池）。
+    scope="function"：每个测试一个全新的内存库，天然隔离。
+
+    历史教训（2026-09-07 收口）：之前是 session 级共享引擎，而
+    auth_token 用固定邮箱 test@example.com 注册。一旦某个测试触发了
+    会显式 commit 的端点（新增的 images/persona/compliance 路由），
+    同会话里 pending 的注册用户会一起落库 → 之后所有测试的 auth_token
+    都撞 409（全量回归连环 error，21 个）。改成每测试独立引擎后，
+    无论端点是否 commit，数据都随测试结束的引擎销毁，无需依赖
+    「路由不 commit」这一隐性前提。
 
     SQLite 内存模式：
-    - 每个测试用例独立事务，互不影响
-    - 测试结束后自动丢弃所有数据
+    - StaticPool 强制单连接，保证 create_all 与后续查询看到同一个库
+    - 连接随 dispose 释放，内存库自动销毁
     """
-    # connect_args: SQLite 内存模式不需要 check_same_thread
-    engine = create_async_engine(
-        TEST_DATABASE_URL,
-        echo=False,
-        connect_args={"check_same_thread": False} if _use_sqlite else {},
-    )
+    engine_kwargs: dict = {"echo": False}
+    if _use_sqlite:
+        engine_kwargs["poolclass"] = StaticPool
+        # connect_args: SQLite 内存模式不需要 check_same_thread
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+    engine = create_async_engine(TEST_DATABASE_URL, **engine_kwargs)
 
     # 创建所有表（读取 Base 的所有继承类）
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
-
-    # 测试结束后清理
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()
 

@@ -1,20 +1,22 @@
-"""VeyaShip - 1688 商品爬虫
-
-【全栈学习者必读】
-这个文件展示了后端的"多源降级策略"：
-1. 首选：Onebound API（官方数据接口，稳定高效）
-2. 备选：httpx 直接抓取（解析 HTML）
-3. 最终：curl_cffi 模拟浏览器（处理反爬）
-
-为什么做多层降级？
-- 跨境电商场景中，1688 有严格的反爬机制
-- 没有"一劳永逸"的抓取方案，需要多管齐下
-- Onebound 是付费 API，不是所有用户都配置了
+"""VeyaShip - 1688 商品爬虫（CAP-01：健壮抓取 + 稳定错误分类 + 降级直抓）
 
 数据流向：
-  用户粘贴 1688 链接 → products.py 路由 → 本爬虫
-  → {优先 API} 或 {降级抓取}
-  → 返回结构化数据 → 存入数据库
+  卖家粘贴 1688 链接 → products 路由（平台 Key 就绪检查）
+  → scrape_1688（优先 Onebound API → 失败自动降级直抓 HTML）
+  → 统一清洗字段 → 返回 data_source 标注 + 结构化数据 → 落库
+
+为什么做这套「错误分类」而不直接抛底层异常？
+- 使用方是非技术跨境卖家：raw 异常（httpx.TimeoutException / HTTPStatusError…）
+  会让前端拿到 500 或英文/技术栈信息，卖家无法决定下一步。
+- 统一成「稳定错误码 + 中文可读 message」，前端按 code 给引导、运维按 code 统计。
+- 所有业务错误都以 4xx 暴露给卖家（错误在卖家这一侧，不是服务器崩溃）。
+
+兼容约束：
+- ScrapeError 继承 RuntimeError → 旧 `except RuntimeError` 调用方不破。
+- InvalidUrlError 多重继承 ValueError + ScrapeError → 既有安全测试
+  （`pytest.raises(ValueError)`）不回归。
+- 成功返回固定含 url/title/main_image_url/price/sales_count/shop_name，
+  radar / Agent 直接调用 scrape_1688 不破。
 """
 
 import ipaddress
@@ -26,74 +28,177 @@ import httpx
 from bs4 import BeautifulSoup
 from app.core.config import settings
 
+# ════════════════════════════════════════════════════════════════
+# 稳定错误码 + 中文可读信息（CAP-01 / C2）
+# ════════════════════════════════════════════════════════════════
+
+
+class ScrapeError(RuntimeError):
+    """1688 抓取业务错误基类。
+
+    Attributes:
+        code: 稳定错误码（前端映射提示 / 运维统计），见各子类。
+        message: 面向非技术卖家的中文可读提示。
+        http_status: 建议路由返回的 HTTP 状态（本模块业务错误统一 < 500）。
+    """
+
+    code: str = "scrape_error"
+    http_status: int = 400
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        http_status: int | None = None,
+    ):
+        super().__init__(message)
+        self._message = message
+        if code is not None:
+            self.code = code
+        if http_status is not None:
+            self.http_status = http_status
+
+    @property
+    def message(self) -> str:
+        """中文可读提示。
+
+        InvalidUrlError 多重继承后 __init__ 解析到 ValueError（更靠前），
+        不会调用本类 __init__ 设置 _message → 从 args[0] 兜底。
+        """
+        msg = getattr(self, "_message", None)
+        if msg is None and self.args:
+            msg = str(self.args[0])
+        return msg or self.code
+
+    def __str__(self) -> str:
+        # 保留旧 `str(e)` 契约：直接返回可读中文 message，而非异常元组
+        return self.message
+
+
+class InvalidUrlError(ValueError, ScrapeError):
+    """链接无效：不是 1688 商品链接 / 无 offer ID / SSRF 类输入。
+
+    同时继承 ValueError：既有代码/测试用 ``except ValueError`` 捕获仍兼容。
+    """
+
+    code = "invalid_url"
+    http_status = 400
+
+
+class ProductNotFoundError(ScrapeError):
+    """商品不存在 / 已下架（数据源明确返回，无需再降级重试）。"""
+
+    code = "product_not_found"
+    http_status = 404
+
+
+class ParseError(ScrapeError):
+    """页面/接口能打开，但拿不到有效商品信息（标题为空、价格显式为 0 等）。"""
+
+    code = "parse_error"
+    http_status = 400
+
+
+class AntiBotError(ScrapeError):
+    """直抓被 1688 风控拦截（验证码 / x5sec / 访问过于频繁 / 超短页面）。"""
+
+    code = "anti_bot"
+    http_status = 400
+
+
+class ScrapeTimeoutError(ScrapeError):
+    """请求超时（Onebound 或直抓站点响应超时）。"""
+
+    code = "timeout"
+    http_status = 400
+
+
+class ServiceUnavailableError(ScrapeError):
+    """数据服务暂时不可用（Onebound 服务端错误 / Key 无效 / 兜底失败）。"""
+
+    code = "service_unavailable"
+    http_status = 400
+
+
+# 常用提示文案集中定义，便于多入口复用一致
+SERVICE_NOT_CONFIGURED_MSG = "数据抓取服务暂未开通，请联系平台客服开通后再试"
+
 
 async def scrape_1688(
     url: str,
     api_key: str = "",
     api_secret: str = "",
 ) -> dict[str, Any]:
+    """抓取 1688 商品（优先 Onebound → 自动降级直抓），返回清洗后的数据。
+
+    Args:
+        url: 1688 商品详情页 URL。
+        api_key: Onebound API Key（平台管理员在设置页配置，存于 SystemConfig）。
+        api_secret: Onebound API Secret。
+
+    Returns:
+        dict: url / data_source(onebound|direct) / title / main_image_url /
+        price / sales_count / shop_name。缺失字段为 None（字段兜底，不整单失败）。
+
+    Raises:
+        InvalidUrlError: 链接不是 1688 商品链接 / 无法识别商品 ID。
+        ProductNotFoundError: 商品不存在或已下架。
+        ParseError: 信息解析异常（标题空 / 价格显式异常）。
+        AntiBotError / ScrapeTimeoutError / ServiceUnavailableError: 抓取被拦 / 超时 / 服务不可用。
+    """
     # 优先用 .env 配置的平台级 Key，未配置则用调用方传入的 Key
     if not api_key and settings.ONEBOUND_API_KEY:
         api_key = settings.ONEBOUND_API_KEY
         api_secret = settings.ONEBOUND_API_SECRET or api_secret
-    """【核心】抓取 1688 商品信息
 
-    执行策略（双保险）：
-    1️⃣ Onebound API：如果管理员配置了 API Key，优先用官方接口
-    2️⃣ 直接抓取：API 失败或未配置时，模拟浏览器访问页面
-    3️⃣ 报错：全部失败时，给用户清晰的错误指引
-
-    Args:
-        url: 1688 商品详情页 URL
-        api_key: Onebound API Key（从数据库读取，管理员在设置页面配置）
-        api_secret: Onebound API Secret
-
-    Returns:
-        dict: 包含 title、main_image_url、price、sales_count、shop_name
-
-    Raises:
-        ValueError: URL 格式不对（不是 1688 链接）
-        RuntimeError: 所有方案都失败了
-    """
-    # ── 1. 校验链接（防 SSRF）────────────────────────────────
-    # 只允许 1688.com 真实商品链接：拒绝伪装域名、IP 直连、私网/环回地址
+    # ── 1. 校验链接（防 SSRF） + 识别商品 ID ──────────────────
     _validate_1688_url(url)
-
-    # 从链接中提取商品 ID（如 https://detail.1688.com/offer/123456.html → 123456）
     offer_id = _extract_offer_id(url)
     if not offer_id:
-        raise ValueError("无法从链接中识别商品 ID")
-
-    # ── 2. 方案一：Onebound API ─────────────────────────────
-    # Onebound 是第三方 1688 数据接口服务商
-    # 需要管理员在设置页配置 API Key
-    # 优势：稳定可靠，不受反爬限制
-    if api_key:
-        data = await _try_onebound_api(offer_id, api_key, api_secret)
-        if data:
-            return {"url": url, **data}
-
-    # ── 3. 方案二：直接抓取 HTML ────────────────────────────
-    # API 失败或没配置时，尝试直接抓取页面
-    # 先用 httpx（轻量级 HTTP 客户端）
-    # 如果被拦截，用 curl_cffi（模拟浏览器指纹）
-    html = await _try_direct_scrape(url)
-    if html and not _is_blocked(html):
-        data = _parse_html(html)
-        if data.get("title"):
-            return {"url": url, **data}
-
-    # ── 4. 全部失败 ─────────────────────────────────────────
-    # 给用户清晰的错误指引，而不是模糊的"抓取失败"
-    if api_key:
-        raise RuntimeError(
-            "scrape_failed",
-            "获取商品信息失败，请确认 API Key 是否正确",
+        raise InvalidUrlError(
+            "链接里没有识别到商品 ID，请粘贴完整的 1688 商品链接"
+            "（示例：https://detail.1688.com/offer/123456789.html）"
         )
-    raise RuntimeError(
-        "scrape_failed",
-        "1688 对自动化访问有严格限制，当前无法自动抓取。请先在「设置」页面配置数据接口。",
-    )
+
+    onebound_err: ScrapeError | None = None
+    raw: Optional[dict] = None
+    source = ""
+
+    # ── 2. 方案一：Onebound API（平台数据服务）─────────────────
+    if api_key:
+        try:
+            raw = await _fetch_onebound(offer_id, api_key, api_secret)
+            source = "onebound"
+        except ProductNotFoundError:
+            # 服务商明确「不存在/已下架」→ 直接结束，再降级直抓没有意义
+            raise
+        except ScrapeError as e:
+            # 超时 / 服务异常等暂时性失败 → 记为一次失败，继续尝试直抓
+            onebound_err = e
+
+    # ── 3. 方案二：直抓 HTML（Onebound 失败或未配置时降级）──────
+    if raw is None:
+        try:
+            raw = await _direct_fetch(url)
+            source = "direct"
+        except ProductNotFoundError:
+            raise
+        except ScrapeError as e:
+            # Onebound 与直抓都失败：优先保留数据服务的分类（平台侧问题更该先暴露）
+            if onebound_err is not None:
+                raise onebound_err from e
+            raise
+
+    # 理论上 _fetch_onebound/_direct_fetch 不会返回 None 且不抛错；兜底防御
+    if raw is None:
+        if onebound_err is not None:
+            raise onebound_err
+        raise ServiceUnavailableError("获取商品信息失败，请稍后再试")
+
+    # ── 4. 统一清洗 + 字段兜底 ───────────────────────────────
+    product = _normalize_product(raw, source=source)
+    return {"url": url, "data_source": source, **product}
 
 
 def _validate_1688_url(url: str) -> None:
@@ -106,32 +211,36 @@ def _validate_1688_url(url: str) -> None:
     - scheme 只能是 http/https
     - 主机名必须是 ``1688.com`` 或 ``*.1688.com`` 子域名（detail/m/www…）
     - 拒绝 IP 直连（私网/环回/保留地址，如 127.0.0.1、169.254.169.254 云元数据）
+
+    Raises:
+        InvalidUrlError（ScrapeError + ValueError 双继承）
     """
+    _bad = lambda: InvalidUrlError("仅支持 1688.com 的商品链接")
     try:
         parsed = urlparse(url)
     except ValueError:
-        raise ValueError("仅支持 1688.com 的商品链接")
+        raise _bad()
 
     if parsed.scheme not in ("http", "https"):
-        raise ValueError("仅支持 1688.com 的商品链接")
+        raise _bad()
 
     # hostname 自动剥离端口与 userinfo（http://1688.com@127.0.0.1 → 127.0.0.1）
     host = (parsed.hostname or "").lower()
     if not host:
-        raise ValueError("仅支持 1688.com 的商品链接")
+        raise _bad()
 
     # 域名必须精确匹配 1688.com 或其子域名，封死 evil.com/1688.com 这类伪装
     if host != "1688.com" and not host.endswith(".1688.com"):
-        raise ValueError("仅支持 1688.com 的商品链接")
+        raise _bad()
 
     # IP 直连兜底：1688 商品链接不会用 IP，一律拒绝（含私网/环回）
     if all(ch in "0123456789." for ch in host):
         try:
             ip = ipaddress.ip_address(host)
         except ValueError:
-            raise ValueError("仅支持 1688.com 的商品链接")
+            raise _bad()
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            raise ValueError("仅支持 1688.com 的商品链接")
+            raise _bad()
 
 
 def _extract_offer_id(url: str) -> str | None:
@@ -152,162 +261,182 @@ def _extract_offer_id(url: str) -> str | None:
 ONEBOUND_URL = "https://api-gw.onebound.cn/1688/item_get"
 
 
-async def _try_onebound_api(
+async def _fetch_onebound(
     offer_id: str,
     api_key: str,
     api_secret: str,
-) -> dict | None:
-    """尝试调用 Onebound API 获取商品数据
+) -> dict:
+    """调用 Onebound API 获取商品原始字段。
 
     Onebound 的 API 格式：
     GET https://api-gw.onebound.cn/1688/item_get?key=xxx&secret=xxx&num_iid=xxx
 
     Returns:
-        dict（标题/图片/价格/销量/店铺）或 None（失败时）
+        dict（title / main_image_url / price / sales_count / shop_name，可为 None）
 
-    为什么这里用 try/except 而不是 raise？
-    - 这只是"方案一"的尝试，失败了还有方案二
-    - 如果抛异常，整个请求就断了，必须用 try 捕获
+    Raises:
+        ProductNotFoundError: 接口 code=0 但无 data（商品在服务商侧不存在）。
+        ScrapeTimeoutError: 请求超时。
+        ServiceUnavailableError: 服务端错误 / Key 无效 / 响应异常（触发直抓降级）。
     """
+    params = {"key": api_key, "secret": api_secret, "num_iid": offer_id}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                ONEBOUND_URL,
-                params={
-                    "key": api_key,
-                    "secret": api_secret,
-                    "num_iid": offer_id,
-                },
-            )
-            if resp.status_code != 200:
-                return None
-
-            result = resp.json()
-            # code=0 表示 API 调用成功
-            if result.get("code") != 0:
-                return None
-
-            data = result.get("data", {})
-            return {
-                "title": data.get("title"),
-                "main_image_url": data.get("pic_url") or data.get("main_pic"),
-                "price": _safe_float(data.get("price") or data.get("batch_price")),
-                "sales_count": _safe_int(data.get("sales") or data.get("sales_30day")),
-                "shop_name": data.get("shop_name") or data.get("nick"),
-            }
+            resp = await client.get(ONEBOUND_URL, params=params)
+    except httpx.TimeoutException:
+        raise ScrapeTimeoutError("数据服务响应超时，请稍后再试")
     except Exception:
-        # 任何异常都不抛，让上层走降级方案
-        return None
+        raise ServiceUnavailableError("数据服务暂时不可用，请稍后再试")
+
+    if resp.status_code != 200:
+        raise ServiceUnavailableError("数据服务暂时不可用，请稍后再试")
+    try:
+        result = resp.json()
+    except ValueError:
+        raise ServiceUnavailableError("数据服务返回异常，请稍后再试")
+
+    # code=0 表示 API 调用成功
+    if result.get("code") != 0:
+        raise ServiceUnavailableError("数据服务暂时不可用，请稍后再试")
+
+    data = result.get("data") or {}
+    # code=0 但没有任何 data → 服务商侧查不到该商品（等价已下架/链接失效）
+    if not data:
+        raise ProductNotFoundError("该商品不存在或已下架，请换一个 1688 商品链接试试")
+
+    return {
+        "title": data.get("title"),
+        "main_image_url": data.get("pic_url") or data.get("main_pic"),
+        "price": data.get("price") or data.get("batch_price"),
+        "sales_count": data.get("sales") or data.get("sales_30day"),
+        "shop_name": data.get("shop_name") or data.get("nick"),
+    }
 
 
 # ════════════════════════════════════════════════════════════════
-# 方案二：直接抓取 HTML
+# 方案二：直接抓取 HTML（降级链路）
 # ════════════════════════════════════════════════════════════════
 
-async def _try_direct_scrape(url: str) -> str | None:
-    """尝试直接抓取 1688 页面 HTML
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.1688.com/",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+}
 
-    两层策略：
-    1. httpx：标准 HTTP 客户端，速度快
-    2. curl_cffi：模拟 Chrome 浏览器指纹，可以绕过部分反爬
+# 反爬拦截特征（命中即视为被风控）
+_BLOCK_MARKERS = ("验证码", "x5sec", "访问过于频繁", "访问验证", "滑动验证")
+# 已下架/失效特征（命中即视为商品不存在）
+_DELISTED_MARKERS = (
+    "商品已下架",
+    "此宝贝已下架",
+    "宝贝不存在",
+    "该商品已删除",
+    "商品不存在",
+    "很抱歉，您查看的宝贝不存在",
+)
 
-    为什么要模拟 User-Agent？
-    - 1688 会检查请求的 User-Agent，非浏览器请求被拒绝
-    - Chrome/120 是目前主流版本，模拟它通过率最高
+
+async def _fetch_html(url: str) -> str:
+    """抓取 1688 详情页 HTML（两层：httpx → curl_cffi 模拟 Chrome TLS 指纹）。
+
+    1688 会检查 TLS 握手特征与 UA，curl_cffi impersonate 可提高直抓通过率。
+
+    Returns:
+        HTML 文本（长度 > 5000，短内容视为被拦/跳转页）。
+
+    Raises:
+        ProductNotFoundError: 返回 404。
+        AntiBotError / ScrapeTimeoutError / ServiceUnavailableError: 抓取被拦 / 超时 / 失败。
     """
-    # ── 第一层：httpx ────────────────────────────────────
+    failures: list[ScrapeError] = []
+
+    # ── 第 1 层：httpx ─────────────────────────────────────
     try:
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(
-                url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                  "AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-                    "Referer": "https://www.1688.com/",
-                    "Accept-Language": "zh-CN,zh;q=0.9",
-                },
-            )
-            resp.raise_for_status()
-            if resp.text and len(resp.text) > 5000:
-                return resp.text
+            resp = await client.get(url, headers=_BROWSER_HEADERS)
+        if resp.status_code == 404:
+            raise ProductNotFoundError("该商品不存在或已下架，请换一个 1688 商品链接试试")
+        resp.raise_for_status()
+        if resp.text and len(resp.text) > 5000:
+            return resp.text
+        failures.append(AntiBotError("1688 有访问保护，暂时无法自动抓取，请稍后重试，或手动录入商品"))
+    except ProductNotFoundError:
+        raise
+    except httpx.TimeoutException:
+        failures.append(ScrapeTimeoutError("抓取超时，请稍后再试"))
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (403, 406, 429):
+            failures.append(AntiBotError("1688 有访问保护，暂时无法自动抓取，请稍后重试，或手动录入商品"))
+        else:
+            failures.append(ServiceUnavailableError("页面暂时无法访问，请稍后再试"))
     except Exception:
-        pass
+        failures.append(ServiceUnavailableError("网络请求失败，请稍后再试"))
 
-    # ── 第二层：curl_cffi（模拟浏览器指纹） ────────────
-    # curl_cffi 能模拟 TLS 指纹，看起来就是真正的 Chrome
-    # 1688 的反爬系统会检查 TLS 握手特征
+    # ── 第 2 层：curl_cffi（模拟 Chrome 120 的 TLS 指纹） ──
     try:
         from curl_cffi.requests import AsyncSession as CurlSession
 
-        async with CurlSession() as s:
-            resp = await s.get(
-                url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                  "AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-                    "Referer": "https://www.1688.com/",
-                },
-                impersonate="chrome120",  # 模拟 Chrome 120 的 TLS 指纹
-            )
-            if resp.text and len(resp.text) > 5000:
-                return resp.text
+        async with CurlSession() as session:
+            resp = await session.get(url, headers=_BROWSER_HEADERS, impersonate="chrome120")
+        if resp.status_code == 404:
+            raise ProductNotFoundError("该商品不存在或已下架，请换一个 1688 商品链接试试")
+        if resp.text and len(resp.text) > 5000:
+            return resp.text
+        failures.append(AntiBotError("1688 有访问保护，暂时无法自动抓取，请稍后重试，或手动录入商品"))
+    except ProductNotFoundError:
+        raise
     except Exception:
-        pass
+        failures.append(ServiceUnavailableError("实时抓取失败，请稍后再试"))
 
-    return None
-
-
-# ════════════════════════════════════════════════════════════════
-# 辅助函数
-# ════════════════════════════════════════════════════════════════
+    if failures:
+        raise failures[-1]
+    raise ServiceUnavailableError("无法获取商品页面，请稍后再试")
 
 
-def _is_blocked(html: str) -> bool:
-    """检测是否被反爬机制拦截
-
-    1688 被拦截的典型特征：
-    - HTML 非常短（< 500 字符）
-    - 页面包含"验证码"或"x5sec"关键字
-    """
-    return len(html.strip()) < 500 or ("验证码" in html and "x5sec" in html)
-
-
-def _safe_float(v: Any) -> float | None:
-    """安全地将值转为 float，失败返回 None"""
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
-def _safe_int(v: Any) -> int | None:
-    """安全地将值转为 int，失败返回 None"""
-    try:
-        return int(float(v))
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_html(html: str) -> dict[str, Any]:
-    """从 HTML 中解析商品信息
-
-    使用 BeautifulSoup 解析 HTML，提取关键数据。
-    各种选择器（selector）是"碰运气"式的——不同页面结构不同。
-    这就是为什么 API 方案比 HTML 解析更可靠。
+async def _direct_fetch(url: str) -> dict:
+    """直抓降级入口：取 HTML → 反爬/下架检测 → 解析原始字段。
 
     Returns:
-        dict: 可能包含 title、main_image_url、price、shop_name
+        dict（title / main_image_url / price / sales_count / shop_name）
+
+    Raises:
+        ProductNotFoundError / AntiBotError / ScrapeTimeoutError / ServiceUnavailableError
+    """
+    html = await _fetch_html(url)
+
+    # 命中反爬特征（长页面也可能夹带验证码浮层）
+    if any(m in html for m in _BLOCK_MARKERS):
+        raise AntiBotError("1688 有访问保护，暂时无法自动抓取，请稍后重试，或手动录入商品")
+
+    # 命中下架/失效特征 → 404 类错误，引导换链接
+    if any(m in html for m in _DELISTED_MARKERS):
+        raise ProductNotFoundError("该商品不存在或已下架，请换一个 1688 商品链接试试")
+
+    return _parse_html(html)
+
+
+def _parse_html(html: str) -> dict:
+    """从 HTML 中解析商品信息。
+
+    使用 BeautifulSoup 解析，选择器是"碰运气"式的（不同页面结构不同），
+    这就是为什么 API 方案比 HTML 解析更可靠。标题没抓到时返回空 dict，
+    由上层 _normalize_product 归类为 parse_error。
+
+    Returns:
+        dict: 可能包含 title、main_image_url、price、shop_name、sales_count
     """
     soup = BeautifulSoup(html, "lxml")
-    result = {}
+    result: dict = {}
 
-    # ── 提取标题 ────────────────────────────────────────
-    # 优先从 og:title meta 标签获取（Open Graph 标准）
+    # ── 提取标题（优先 og:title，其次各 CSS 选择器）─────────
     meta = soup.find("meta", attrs={"property": "og:title"})
     if meta and meta.get("content"):
         result["title"] = meta["content"].split(" - ")[0].strip()
 
-    # 如果 og:title 没抓到，试各种 CSS 选择器
     if not result.get("title"):
         for sel in ["h1[class*='title']", "h1", "[class*='offer-title']"]:
             tag = soup.select_one(sel)
@@ -315,21 +444,29 @@ def _parse_html(html: str) -> dict[str, Any]:
                 result["title"] = t
                 break
 
-    # ── 提取主图 ────────────────────────────────────────
+    # ── 提取主图（og:image） ────────────────────────────────
     meta = soup.find("meta", attrs={"property": "og:image"})
     if meta and meta.get("content"):
         result["main_image_url"] = meta["content"]
 
-    # ── 提取价格 ────────────────────────────────────────
+    # ── 提取价格 ────────────────────────────────────────────
     for sel in ["[class*='price']", "[itemprop='price']"]:
         tag = soup.select_one(sel)
         if tag:
-            nums = re.findall(r"[\d.]+", tag.get_text(strip=True))
+            text = tag.get_text(strip=True)
+            nums = re.findall(r"[\d.]+", text)
             if nums:
-                result["price"] = _safe_float(nums[0])
+                result["price"] = nums[0]  # 留字符串，交给 _clean_price 统一解析
                 break
 
-    # ── 提取店铺名 ──────────────────────────────────────
+    # ── 提取销量（如「已售 1.2万件」） ───────────────────────
+    for sel in ["[class*='sale']", "[class*='sales']", "[class*='deal-count']"]:
+        tag = soup.select_one(sel)
+        if tag and (t := tag.get_text(strip=True)) and re.search(r"\d", t):
+            result["sales_count"] = t
+            break
+
+    # ── 提取店铺名 ──────────────────────────────────────────
     for sel in ["[class*='shop-name']", "[class*='company']"]:
         tag = soup.select_one(sel)
         if tag and (t := tag.get_text(strip=True)) and len(t) > 1:
@@ -337,3 +474,128 @@ def _parse_html(html: str) -> dict[str, Any]:
             break
 
     return result
+
+
+# ════════════════════════════════════════════════════════════════
+# 数据清洗 / 字段兜底（CAP-01 / C4）
+# ════════════════════════════════════════════════════════════════
+
+
+def _clean_text(value: Any, max_len: int = 500) -> str | None:
+    """清洗文本：折叠空白；超长截断；空值返回 None。"""
+    if value is None:
+        return None
+    text = re.sub(r"\s+", " ", str(value)).strip()
+    if not text:
+        return None
+    return text[:max_len]
+
+
+def _clean_price(value: Any) -> tuple[float | None, bool]:
+    """把价格解析为 float；返回 (值或 None, 字段是否「显式存在」)。
+
+    显式存在但解析失败 / ≤ 0 → (None, True)，由上层判为 parse_error；
+    字段本身缺失（None / 空串）→ (None, False)，走字段兜底（落库为 None）。
+    兼容常见格式：「¥9.90」「US $1.2」「1.2-3.4（阶梯价取首价）」。
+    """
+    if value is None:
+        return None, False
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None, False
+        # 阶梯价「1.2-3.4」取第一个数值；去掉货币符号/千分位
+        m = re.search(r"(\d+(?:\.\d+)?)", s)
+        if not m:
+            return None, True
+        try:
+            parsed = float(m.group(1))
+        except ValueError:
+            return None, True
+        return parsed, True
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None, True
+    return parsed, True
+
+
+_CN_MAGNITUDE = {"千": 1_000, "万": 10_000, "亿": 100_000_000}
+
+
+def _clean_int(value: Any) -> int | None:
+    """把销量等转 int。
+
+    兼容 1688 常见中文数量文本：
+    - 「已售1.2万+」「10万+」等带量级后缀 → 按 千/万/亿 换算成整数（12000 / 100000）
+    - 「已售123件」等纯数字文本 → 提取数字位（123）
+    失败/缺失 → None。
+
+    注：老版本直接剥掉所有非数字，会把「1.2万」错读成 12，已修复。
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.replace(",", "").replace("，", "").strip()
+        if not text:
+            return None
+        # 1) 带量级写法：数字 + 千/万/亿（前后允许中文/符号，如「已售1.2万+」）
+        m = re.search(r"(\d+(?:\.\d+)?)\s*([万亿千])", text)
+        if m:
+            try:
+                return int(float(m.group(1)) * _CN_MAGNITUDE[m.group(2)])
+            except (ValueError, KeyError):
+                return None
+        # 2) 纯数字兜底：取全部数字位
+        digits = re.sub(r"\D", "", text)
+        if not digits:
+            return None
+        try:
+            return int(digits)
+        except ValueError:
+            return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _clean_image_url(value: Any) -> str | None:
+    """归一主图地址：协议相对「//x」补 https；仅保留 http(s)。"""
+    if not value:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    if s.startswith("//"):
+        s = "https:" + s
+    if not s.lower().startswith(("http://", "https://")):
+        return None
+    return s[:1000]
+
+
+def _normalize_product(raw: dict, source: str) -> dict:
+    """清洗与字段兜底：缺失字段给 None，不因单个字段缺失整单失败。
+
+    Raises:
+        ParseError: 标题为空 / 价格字段「显式存在但解析为 0 或无法解析」。
+    """
+    title = _clean_text(raw.get("title"), max_len=500)
+    if not title:
+        raise ParseError(
+            "未能识别出商品标题，页面结构可能已变化，请稍后重试，或手动录入该商品"
+        )
+
+    price, price_present = _clean_price(raw.get("price"))
+    if price_present and (price is None or price <= 0):
+        raise ParseError(
+            "商品价格解析异常，请换一个商品链接试试，或手动录入该商品"
+        )
+
+    return {
+        "title": title,
+        "main_image_url": _clean_image_url(raw.get("main_image_url")),
+        "price": round(price, 2) if price is not None else None,
+        "sales_count": _clean_int(raw.get("sales_count")),
+        "shop_name": _clean_text(raw.get("shop_name"), max_len=255),
+    }

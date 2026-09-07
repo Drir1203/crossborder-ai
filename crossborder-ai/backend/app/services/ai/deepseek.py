@@ -82,6 +82,7 @@ class DeepSeekService:
         user_prompt: str,
         max_tokens: int = 2000,
         temperature: Optional[float] = None,
+        persona_block: Optional[str] = None,
     ) -> str:
         """【核心方法】调用 DeepSeek Chat API 生成文本
 
@@ -109,6 +110,10 @@ class DeepSeekService:
         Raises:
             httpx.HTTPError: API 调用失败（经过十重试后仍失败）
         """
+        # 统一品牌档案注入（CAP-04）：有 persona_block 则放到 system prompt 顶部
+        if persona_block:
+            system_prompt = f"{persona_block}\n\n{system_prompt}"
+
         # httpx.AsyncClient 是异步 HTTP 客户端
         # 相比 requests 库，它不阻塞事件循环
         # with 语句确保请求完成后自动关闭连接
@@ -202,6 +207,7 @@ class DeepSeekService:
         platform: str = "amazon",
         target_language: Optional[str] = None,
         max_length: Optional[int] = None,
+        persona_block: Optional[str] = None,
     ) -> str:
         """生成优化的商品描述
 
@@ -226,6 +232,8 @@ class DeepSeekService:
             f"Include relevant SEO keywords naturally. "
             f"Format the output for the {platform} platform's requirements."
         )
+        if persona_block:
+            system_prompt = f"{persona_block}\n\n{system_prompt}"
 
         # user prompt 说明具体任务
         user_prompt = f"Product: {product_title}\n"
@@ -244,6 +252,7 @@ class DeepSeekService:
         features: str,
         count: int = 5,
         platform: str = "amazon",
+        persona_block: Optional[str] = None,
     ) -> List[str]:
         """生成卖点列表（Bullet Points）
 
@@ -264,6 +273,8 @@ class DeepSeekService:
             f"Generate {count} compelling bullet points that highlight key benefits and features. "
             f"Each bullet should start with a capitalized benefit word followed by a colon."
         )
+        if persona_block:
+            system_prompt = f"{persona_block}\n\n{system_prompt}"
 
         user_prompt = (
             f"Product: {product_title}\n"
@@ -311,6 +322,7 @@ class DeepSeekService:
         title: str,
         description: str,
         platform: str = "amazon",
+        persona_block: Optional[str] = None,
     ) -> Dict[str, str]:
         """优化商品内容的 SEO
 
@@ -332,6 +344,8 @@ class DeepSeekService:
             f"No markdown, no bold markers, no extra text. "
             f"Front-load important keywords. Keep the title under 200 characters."
         )
+        if persona_block:
+            system_prompt = f"{persona_block}\n\n{system_prompt}"
 
         user_prompt = (
             f"Original Title: {title}\n"

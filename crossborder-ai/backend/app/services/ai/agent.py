@@ -25,6 +25,7 @@ class AgentState(TypedDict):
     platform: str
     target_language: Optional[str]
     tone: str
+    persona_block: Optional[str]
     source_content: Optional[str]
     generated_title: Optional[str]
     generated_description: Optional[str]
@@ -117,6 +118,7 @@ class ListingAgent:
                 f"Target Language: {state.get('target_language', 'en')}"
             ),
             max_tokens=300,
+            persona_block=state.get("persona_block"),
         )
 
         return {"generated_title": title.strip(), "iteration_count": state["iteration_count"] + 1}
@@ -129,6 +131,7 @@ class ListingAgent:
             tone=state["tone"],
             platform=state["platform"],
             target_language=state.get("target_language"),
+            persona_block=state.get("persona_block"),
         )
 
         return {"generated_description": description}
@@ -139,6 +142,7 @@ class ListingAgent:
             product_title=state.get("generated_title") or state["product_title"],
             features=state["features"],
             platform=state["platform"],
+            persona_block=state.get("persona_block"),
         )
 
         return {"generated_bullet_points": bullets}
@@ -149,6 +153,7 @@ class ListingAgent:
             title=state.get("generated_title") or state["product_title"],
             description=state.get("generated_description") or state["product_description"],
             platform=state["platform"],
+            persona_block=state.get("persona_block"),
         )
 
         return seo
@@ -218,6 +223,7 @@ class ListingAgent:
         tone: str = "professional",
         target_language: Optional[str] = None,
         max_iterations: int = 2,
+        persona_block: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Run the full listing generation agent workflow.
 
@@ -229,6 +235,7 @@ class ListingAgent:
             tone: Writing tone.
             target_language: Target language for translation.
             max_iterations: Maximum regeneration cycles.
+            persona_block: 统一品牌档案块（CAP-04），注入各生成步 system prompt 顶部。
 
         Returns:
             Final generated listing content.
@@ -240,6 +247,7 @@ class ListingAgent:
             "platform": platform,
             "target_language": target_language,
             "tone": tone,
+            "persona_block": persona_block,
             "source_content": None,
             "generated_title": None,
             "generated_description": None,

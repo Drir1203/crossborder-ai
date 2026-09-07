@@ -31,5 +31,13 @@ class Persona(Base):
     # 禁词（JSON 数组）
     banned_words: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ── Brand Kit 扩展字段（CAP-04，均可空）────────────────────
+    # 目标市场/站点（如 amazon.com / 美国站 / 日本站）
+    target_market: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 主营类目（如 3C 配件 / 家居收纳）
+    product_category: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 图片风格提示词（如 "clean studio lighting, soft shadows"）
+    image_style: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

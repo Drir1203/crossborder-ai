@@ -29,6 +29,8 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/authStore'
 import apiClient from '@/api/client'
+import OnboardingGuide from '@/components/dashboard/OnboardingGuide'
+import ImageHistoryGallery from '@/components/dashboard/ImageHistoryGallery'
 
 /** 看板数据类型 */
 interface DashboardData {
@@ -179,6 +181,9 @@ export default function DashboardPage() {
         </Button>
       </div>
 
+      {/* ── 新手三步激活引导（CAP-07）────────────────────── */}
+      <OnboardingGuide />
+
       {/* ── 快捷入口 ──────────────────────────────────────── */}
       <div className="grid grid-cols-4 gap-3">
         {quickActions.map((action) => (
@@ -303,6 +308,9 @@ export default function DashboardPage() {
       {agentMutation.data && showAgentResult && (
         <AgentResult data={agentMutation.data} onClose={() => setShowAgentResult(false)} />
       )}
+
+      {/* ── 最近生成的图（CAP-07 图结果历史画廊）──────────── */}
+      <ImageHistoryGallery />
 
       {/* ── 最近操作 ──────────────────────────────────────── */}
       <Card>

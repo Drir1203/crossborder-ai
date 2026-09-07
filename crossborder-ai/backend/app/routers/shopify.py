@@ -1,19 +1,27 @@
 """VeyaShip - Shopify 路由（F8 Publisher + F7 Concierge）
 
 功能：
-1. Shopify OAuth 授权绑定
+1. Shopify OAuth 授权绑定（CAP-02：修复 OAuth 断链闭环）
 2. 合规审查（违禁词检测）
 3. 推送商品到 Shopify
 4. 拉取订单（F7）
-5. 自动退款（F7，真调 Shopify Refund API）
+5. 自动退款（F7，真调 Shopify Refund API，带 CAP-03 护栏）
 """
 
+import asyncio
+import hashlib
+import hmac as hmac_mod
 import json
 import re
+import time
+from datetime import date, timedelta
 from typing import Optional
+from urllib.parse import urlencode
+from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.access_control import check_feature_access
+from app.core.crypto import decrypt_value, encrypt_value, mask_secret
+from app.core.security import create_access_token, decode_token_safe
 from app.dependencies import get_current_user
 from app.models.product import Product
 from app.models.shopify_channel import ShopifyChannel
@@ -128,70 +138,295 @@ async def get_channel(channel_id: str, user_id, db) -> ShopifyChannel:
     return ch
 
 
+# ── Shopify 店铺名 / OAuth / 退款护栏 工具 ──────────────────────
+# root cause（CAP-02）：旧 /auth 用 f"https://{shop}.myshopify.com/..." 拼域，
+# 但前端传的 shop 已含 .myshopify.com 全域名 → 双重域名；旧 /callback 又把全域名当 shop_name 落库，
+# 下游 push / orders / auto-refund 再用 f"{shop_name}.myshopify.com" 拼一次 → 请求全部打错地址。
+# 修法：全仓只在 shop_domain() 一个点拼域名，入库 shop_name 只存裸子域。
+SHOPIFY_SHOP_SUFFIX = ".myshopify.com"
+# OAuth scope 说明（保持最小化）：
+#   write_products / read_products —— F8 Publisher 推商品为草稿 + 读商品；
+#   read_orders / write_orders    —— F7 Concierge 拉订单 + 自动退款需要。
+# 不要追加 settings/theme 等无关权限。
+SHOPIFY_OAUTH_SCOPES = "write_products,read_products,read_orders,write_orders"
+# 绑定 state 令牌有效期：只需覆盖用户从点击授权到 Shopify 跳回的过程，10 分钟足够且降低被重放风险。
+SHOPIFY_STATE_TTL_MINUTES = 10
+# Shopify 回调时间戳允许偏差（秒）：防重放，见 CAP-02 spec。
+SHOPIFY_HMAC_MAX_SKEW = 300
+
+# CAP-03 自动退款护栏常量。
+# 进程内 dict 计数：单机可用，生产多副本应换 Redis/DB 原子计数，见 specs/shopify-binding/spec.md。
+MAX_REFUND_AMOUNT = 100.0         # 单次自动退款请求的总金额上限（按订单币种计）
+MAX_DAILY_REFUND_TOTAL = 300.0    # 同一用户/店铺单日累计自动退款上限
+_DAILY_REFUND_TOTALS: dict[str, list] = {}  # user_id -> [date, total]，进程内，重启清零
+_REFUND_LOCK = asyncio.Lock()
+
+
+def normalize_shop(raw: str | None) -> str:
+    """把用户输入规范成 Shopify 裸子域（如 yourshop）。
+
+    兼容传 .myshopify.com 全域名 / 带空白的输入：先剥后缀与空白，
+    再用 ^[a-z0-9][a-z0-9-]*$ 校验（Shopify 子域规则：小写字母数字、可含中划线）。
+    非法时抛 400，中文提示面向卖家。
+
+    Raises:
+        HTTPException 400: 店铺域名格式不正确
+    """
+    if not raw or not isinstance(raw, str):
+        raise HTTPException(status_code=400, detail="店铺域名格式不正确")
+    s = raw.strip()
+    if s.endswith(SHOPIFY_SHOP_SUFFIX):
+        s = s[: -len(SHOPIFY_SHOP_SUFFIX)].strip()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", s):
+        raise HTTPException(status_code=400, detail="店铺域名格式不正确")
+    return s
+
+
+def shop_domain(bare: str) -> str:
+    """由裸子域拼完整店铺域名。全仓拼域唯一入口，杜绝双重域名。"""
+    return f"{bare}{SHOPIFY_SHOP_SUFFIX}"
+
+
+def _channel_domain(channel: ShopifyChannel) -> str:
+    """渠道域名：优先取库里的全域名 shop_domain，旧数据为空时兜底拼一次。"""
+    return channel.shop_domain or shop_domain(channel.shop_name)
+
+
+def _require_shopify_config() -> tuple[str, str, str]:
+    """校验 Shopify 应用三要素（Key/Secret/回调地址）已配置，缺一抛 400。
+
+    root cause：平台级 API Key 由运维在 .env 配置，卖家不可见；
+    未配置时旧实现只报"未配置 API Key"，语义不清，统一为"Shopify 应用尚未配置"。
+    """
+    api_key = settings.SHOPIFY_API_KEY
+    api_secret = settings.SHOPIFY_API_SECRET
+    redirect_uri = settings.SHOPIFY_REDIRECT_URI
+    if not api_key or not api_secret or not redirect_uri:
+        raise HTTPException(status_code=400, detail="Shopify 应用尚未配置")
+    return api_key, api_secret, redirect_uri
+
+
+async def _require_binding_user(request: Request, token_param: str | None, db: AsyncSession) -> User:
+    """解析发起 OAuth 绑定的当前用户。
+
+    root cause：绑定由浏览器整页跳转发起（window.location），
+    纯整页跳转带不了 Authorization 头（与 api/sse.ts 的 EventSource 同限制），
+    因此支持 query token 兜底；Authorization 头优先，二者都无则 401。
+    """
+    raw: str | None = None
+    auth = request.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        raw = auth[7:].strip()
+    if not raw:
+        raw = token_param or None
+    if not raw:
+        raise HTTPException(status_code=401, detail="未登录，请先登录")
+    payload = decode_token_safe(raw)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    try:
+        uid = UUID(payload.get("sub", ""))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    result = await db.execute(select(User).where(User.id == uid))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    return user
+
+
+def _shopify_hmac_ok(request: Request, api_secret: str, provided: str | None) -> bool:
+    """校验 Shopify 回调的 HMAC-SHA256 签名。
+
+    root cause：旧实现不验 hmac，回调可被第三方伪造。
+    算法：取除 hmac/signature 外的全部 query 参数，按 key 字母序拼成 k=v&...，
+    以 client_secret 为密钥做 HMAC-SHA256 hexdigest；
+    用 hmac.compare_digest 固定时间比较，防时序侧信道。
+    """
+    if not provided:
+        return False
+    pairs: list[tuple[str, str]] = []
+    for part in request.url.query.split("&"):
+        if not part:
+            continue
+        k, _, v = part.partition("=")
+        if k in ("hmac", "signature"):
+            continue
+        pairs.append((k, v))
+    pairs.sort(key=lambda kv: kv[0])
+    message = "&".join(f"{k}={v}" for k, v in pairs)
+    digest = hmac_mod.new(
+        api_secret.encode("utf-8"), message.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return hmac_mod.compare_digest(digest, provided)
+
+
+async def _check_daily_refund_cap(user_id: str, amount: float) -> bool:
+    """单日累计退款上限检查（含当次请求金额）。
+
+    进程内 dict 计数（{user_id: (date, total)}）；跨进程/重启安全做法见 spec，
+    生产建议换 Redis INCRBY + 过期时间或 DB 当日汇总。
+    """
+    async with _REFUND_LOCK:
+        today = date.today().isoformat()
+        rec = _DAILY_REFUND_TOTALS.get(user_id)
+        used = rec[1] if rec and rec[0] == today else 0.0
+        return used + amount <= MAX_DAILY_REFUND_TOTAL
+
+
+async def _record_daily_refund(user_id: str, amount: float) -> None:
+    """把本次实际退款金额累加进当日计数（仅成功退款才计）。"""
+    async with _REFUND_LOCK:
+        today = date.today().isoformat()
+        rec = _DAILY_REFUND_TOTALS.get(user_id)
+        used = rec[1] if rec and rec[0] == today else 0.0
+        _DAILY_REFUND_TOTALS[user_id] = [today, used + amount]
+
+
 # ── 路由 ──────────────────────────────────────────────────────
 
 @router.get("/auth")
 async def shopify_oauth_url(
-    shop: str = Query(..., description="Shopify 店铺名，如 my-store"),
+    request: Request,
+    shop: str | None = Query(None, description="Shopify 店铺名（裸子域或全域名均可）"),
+    token: str | None = Query(None, description="整页跳转兜底 JWT（浏览器跳转无法带 Authorization 头）"),
+    db: AsyncSession = Depends(get_db),
 ):
-    """生成 Shopify OAuth 授权链接"""
-    api_key = settings.SHOPIFY_API_KEY
-    if not api_key:
-        raise HTTPException(status_code=400, detail="未配置 Shopify API Key")
+    """302 跳转 Shopify OAuth 授权页（而不是返回 JSON）。
 
-    redirect_uri = settings.SHOPIFY_REDIRECT_URI or f"{settings.APP_URL}/api/v1/shopify/callback"
-    scopes = "write_products,read_products,read_orders,write_orders"
+    root cause：旧实现返回 {"auth_url": ...} JSON，且 f"https://{shop}.myshopify.com" 拼域，
+    前端传的 shop 已带 .myshopify.com → 双重域名、整页跳转只看到 JSON。
+    绑定是已登录用户点按钮触发的 → 先鉴权拿到 user id，签 10 分钟 state 防 CSRF/重放。
+    """
+    current_user = await _require_binding_user(request, token, db)
+    api_key, _api_secret, redirect_uri = _require_shopify_config()
+    bare = normalize_shop(shop)
 
-    auth_url = (
-        f"https://{shop}.myshopify.com/admin/oauth/authorize"
-        f"?client_id={api_key}"
-        f"&scope={scopes}"
-        f"&redirect_uri={redirect_uri}"
+    # state：stateless 的短时 JWT，回调里 decode 校验即可，无需额外存储。
+    state = create_access_token(
+        subject=str(current_user.id),
+        extra_claims={"type": "shopify_oauth_state", "shop": bare, "ts": int(time.time())},
+        expires_delta=timedelta(minutes=SHOPIFY_STATE_TTL_MINUTES),
     )
-    return {"auth_url": auth_url, "shop": shop}
+    params = urlencode({
+        "client_id": api_key,
+        "scope": SHOPIFY_OAUTH_SCOPES,
+        "redirect_uri": redirect_uri,
+        "state": state,
+    })
+    auth_url = f"https://{shop_domain(bare)}/admin/oauth/authorize?{params}"
+    return RedirectResponse(url=auth_url, status_code=302)
 
 
 @router.get("/callback")
 async def shopify_oauth_callback(
-    code: str = Query(...),
-    shop: str = Query(...),
-    current_user: User = Depends(get_current_user),
+    request: Request,
+    code: str | None = Query(None, description="Shopify 授权码"),
+    shop: str | None = Query(None, description="店铺域名（可能带 .myshopify.com 后缀）"),
+    timestamp: str | None = Query(None, description="Shopify 回传的 Unix 时间戳"),
+    hmac_sig: str | None = Query(None, alias="hmac", description="Shopify HMAC-SHA256 签名"),
+    state: str | None = Query(None, description="绑定 state 令牌"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Shopify OAuth 回调：用 code 换 token，存入数据库"""
-    api_key = settings.SHOPIFY_API_KEY
-    api_secret = settings.SHOPIFY_API_SECRET
-    if not api_key or not api_secret:
-        raise HTTPException(status_code=400, detail="未配置 Shopify API Key/Secret")
+    """Shopify OAuth 回调（浏览器 302 跳回，不鉴权）。
 
-    # 用 code 换 access_token
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"https://{shop}/admin/oauth/access_token",
-            json={"client_id": api_key, "client_secret": api_secret, "code": code},
+    root cause（CAP-02）：
+    1. 旧实现挂 Depends(get_current_user)——浏览器跳回无 JWT，必然 401；
+    2. 无 state 校验 → 存在 CSRF/伪造绑定；
+    3. 无 hmac/timestamp 校验 → 回调可被伪造/重放；
+    4. shop 全域名直接当 shop_name 存库 → 下游请求双重域名。
+    现流程：state 缺失 → 验 state → 店铺一致性 → 时间戳窗口 → hmac → 换 token → 加密落库 → 302 回前端。
+    """
+    origin = str(request.base_url).rstrip("/")
+
+    def _front_redirect(**params: str) -> RedirectResponse:
+        """拼回 SPA 页面路径 /app/shopify 的 302（?error=... 或 ?bound=1&shop=...）。"""
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        return RedirectResponse(url=f"{origin}/app/shopify?{qs}", status_code=302)
+
+    # ① state 缺失
+    if not state:
+        return _front_redirect(error="state_missing")
+
+    # ② state 校验：验签/过期/类型/店铺一致/用户存在
+    payload = decode_token_safe(state)
+    try:
+        bare = normalize_shop(shop)
+    except HTTPException:
+        return _front_redirect(error="invalid_state")
+    if payload is None:
+        return _front_redirect(error="invalid_state")
+    if payload.get("type") != "shopify_oauth_state":
+        return _front_redirect(error="invalid_state")
+    if payload.get("shop") != bare:
+        return _front_redirect(error="invalid_state")
+    try:
+        uid = UUID(payload.get("sub", ""))
+    except (ValueError, TypeError):
+        return _front_redirect(error="invalid_state")
+    result = await db.execute(select(User).where(User.id == uid))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return _front_redirect(error="invalid_state")
+
+    # ③ Shopify 时间戳 5 分钟内（防重放）
+    try:
+        ts = int(timestamp or "")
+    except (ValueError, TypeError):
+        return _front_redirect(error="invalid_state")
+    if abs(time.time() - ts) > SHOPIFY_HMAC_MAX_SKEW:
+        return _front_redirect(error="invalid_state")
+
+    # ④ 平台配置 + hmac 校验
+    try:
+        api_key, api_secret, _redirect_uri = _require_shopify_config()
+    except HTTPException:
+        return _front_redirect(error="config")
+    if not _shopify_hmac_ok(request, api_secret, hmac_sig):
+        return _front_redirect(error="invalid_hmac")
+
+    # ⑤ 用 code 换 access_token
+    domain = shop_domain(bare)
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"https://{domain}/admin/oauth/access_token",
+                json={"client_id": api_key, "client_secret": api_secret, "code": code},
+            )
+    except httpx.HTTPError:
+        return _front_redirect(error="token_exchange")
+    if resp.status_code != 200:
+        return _front_redirect(error="token_exchange")
+    token_data = resp.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        return _front_redirect(error="token_exchange")
+
+    # ⑥ upsert 落库：唯一键 (user_id, 裸店铺名)，access_token 加密存储
+    enc_token = encrypt_value(access_token)
+    sel = await db.execute(
+        select(ShopifyChannel).where(
+            ShopifyChannel.user_id == user.id,
+            ShopifyChannel.shop_name == bare,
         )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="授权失败，请重试")
-        token_data = resp.json()
-        access_token = token_data.get("access_token")
-
-    # 查重/保存
-    result = await db.execute(
-        select(ShopifyChannel).where(ShopifyChannel.user_id == current_user.id, ShopifyChannel.shop_name == shop)
     )
-    existing = result.scalar_one_or_none()
+    existing = sel.scalar_one_or_none()
     if existing:
-        existing.access_token = access_token
+        existing.access_token = enc_token
+        existing.shop_domain = domain
+        existing.is_active = True
     else:
         db.add(ShopifyChannel(
-            user_id=current_user.id,
-            shop_name=shop,
-            shop_domain=f"{shop}.myshopify.com",
-            access_token=access_token,
+            user_id=user.id,
+            shop_name=bare,
+            shop_domain=domain,
+            access_token=enc_token,
+            is_active=True,
         ))
     await db.flush()
 
-    return {"message": f"Shopify 店铺 {shop} 绑定成功", "shop": shop}
+    # ⑦ 成功 → 302 回前端
+    return _front_redirect(bound="1", shop=bare)
 
 
 @router.get("/channels")
@@ -199,18 +434,54 @@ async def list_channels(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """查看已绑定的 Shopify 店铺列表"""
+    """查看当前用户绑定的全部 Shopify 店铺。
+
+    返回：裸店铺名（shop_name）+ 完整域名（shop_domain/domain）+ 是否激活。
+    安全：access_token 永不下发明文，仅回显掩码 token_masked（crypto.mask_secret）。
+    """
     result = await db.execute(
-        select(ShopifyChannel).where(
-            ShopifyChannel.user_id == current_user.id,
-            ShopifyChannel.is_active == True,
-        )
+        select(ShopifyChannel).where(ShopifyChannel.user_id == current_user.id)
     )
     channels = result.scalars().all()
     return [
-        {"id": str(c.id), "shop_name": c.shop_name, "domain": c.shop_domain, "created_at": str(c.created_at)}
+        {
+            "id": str(c.id),
+            "shop_name": c.shop_name,
+            "shop_domain": c.shop_domain,
+            "domain": c.shop_domain,  # 兼容旧前端字段名
+            "is_active": c.is_active,
+            "token_masked": mask_secret(c.access_token),
+            "created_at": str(c.created_at),
+            "updated_at": str(c.updated_at) if c.updated_at else None,
+        }
         for c in channels
     ]
+
+
+@router.delete("/channels/{channel_id}")
+async def unbind_channel(
+    channel_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """解绑（删除）一个 Shopify 渠道。
+
+    root cause/安全：删除必须先做 owner 校验（channel.user_id == 当前用户），
+    否则任意登录用户可越权删除他人店铺绑定。
+    """
+    try:
+        cid = UUID(channel_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的渠道 ID")
+    result = await db.execute(select(ShopifyChannel).where(ShopifyChannel.id == cid))
+    channel = result.scalar_one_or_none()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Shopify 渠道不存在")
+    if channel.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权操作该渠道")
+    await db.delete(channel)
+    await db.flush()
+    return {"ok": True}
 
 
 @router.post("/compliance")
@@ -254,7 +525,13 @@ async def push_product(
         pid = UUID(payload.product_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="无效的商品 ID")
-    result = await db.execute(select(Product).where(Product.id == pid))
+    # 归属过滤：只允许推送自己的商品，他人商品等同不存在
+    result = await db.execute(
+        select(Product).where(
+            Product.id == pid,
+            Product.user_id == current_user.id,
+        )
+    )
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
@@ -288,9 +565,11 @@ async def push_product(
         )
 
     # 调用 Shopify API 创建商品（F8 Publisher）
-    shop_url = f"https://{channel.shop_name}.myshopify.com/admin/api/2024-10"
+    # root cause：shop_name 现在只存裸子域，拼域统一走 _channel_domain，杜绝双重域名；
+    # access_token 库内为密文（enc: 前缀），调 API 前必须先 decrypt。
+    shop_url = f"https://{_channel_domain(channel)}/admin/api/2024-10"
     headers = {
-        "X-Shopify-Access-Token": channel.access_token,
+        "X-Shopify-Access-Token": decrypt_value(channel.access_token),
         "Content-Type": "application/json",
     }
 
@@ -312,7 +591,7 @@ async def push_product(
         return {
             "message": "商品已发布到 Shopify（草稿状态）",
             "shopify_product_id": shopify_product.get("id"),
-            "shopify_url": f"https://{channel.shop_name}.myshopify.com/admin/products/{shopify_product.get('id')}",
+            "shopify_url": f"https://{_channel_domain(channel)}/admin/products/{shopify_product.get('id')}",
         }
 
 
@@ -333,8 +612,10 @@ async def list_shopify_orders(
     返回订单 ID、金额、状态等信息。
     """
     channel = await get_channel(channel_id, current_user.id, db)
-    shop_url = f"https://{channel.shop_name}.myshopify.com/admin/api/2024-10"
-    headers = {"X-Shopify-Access-Token": channel.access_token}
+    # root cause：旧实现用 channel.shop_name 拼域，而 shop_name 曾存全域名 → 双重域名打错地址。
+    # 统一走 _channel_domain；token 是密文，调 API 前解密。
+    shop_url = f"https://{_channel_domain(channel)}/admin/api/2024-10"
+    headers = {"X-Shopify-Access-Token": decrypt_value(channel.access_token)}
 
     async with httpx.AsyncClient() as client:
         resp = await client.get(f"{shop_url}/orders.json", headers=headers, params={
@@ -365,26 +646,32 @@ async def list_shopify_orders(
 async def auto_refund(
     channel_id: str = Query(..., description="Shopify 渠道 ID"),
     threshold: float = Query(10.0, description="自动退款阈值，低于此金额的订单自动退"),
+    confirm: bool = Query(False, description="二次确认开关：必须显式 confirm=true 才会执行真实退款"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """自动退款（F7 Concierge）
+    """自动退款（F7 Concierge，带 CAP-03 护栏的真实扣款）。
 
-    规则：金额 < threshold（默认 ¥10）的已付款订单自动退款。
+    CAP-03 护栏（生产计数应换 Redis/DB，见 specs/shopify-binding/spec.md）：
+    1. 必须显式 confirm=true —— 前端二次确认后才调，防脚本/误触直接打真实扣款接口。
+    2. 单次请求退款总金额 ≤ MAX_REFUND_AMOUNT，超限整体拒绝（400）。
+    3. 同一用户单日累计退款 ≤ MAX_DAILY_REFUND_TOTAL（进程内 dict），超限拒绝（400）。
+    4. 每笔失败/异常项带原因返回，不吞错；只在实际退款成功后才累加当日计数。
 
-    流程：
-    1. 拉取最近 50 笔订单
-    2. 过滤已付款且金额 < threshold 的订单
-    3. 对每笔符合条件的订单真调 Shopify Refund API
-    4. 返回退款结果明细
-
-    ⚠️ 此为真实退款操作，会真扣 Shopify 商户账户余额。
+    ⚠️ 真实退款操作，会真扣 Shopify 商户账户余额。
     """
+    # ① 渠道归属校验（owner 过滤在 get_channel 内，防越权）
     channel = await get_channel(channel_id, current_user.id, db)
-    shop_url = f"https://{channel.shop_name}.myshopify.com/admin/api/2024-10"
-    headers = {"X-Shopify-Access-Token": channel.access_token}
 
-    # 1. 拉取订单
+    # ② 显式确认护栏：没有 confirm=true 一律拒绝
+    if not confirm:
+        raise HTTPException(status_code=400, detail="请确认后再发起退款")
+
+    # root cause：shop_name 存裸子域，拼域走 _channel_domain；token 密文先解密再用。
+    shop_url = f"https://{_channel_domain(channel)}/admin/api/2024-10"
+    headers = {"X-Shopify-Access-Token": decrypt_value(channel.access_token)}
+
+    # ③ 拉取已付款订单
     async with httpx.AsyncClient() as client:
         resp = await client.get(f"{shop_url}/orders.json", headers=headers, params={
             "status": "any",
@@ -392,29 +679,44 @@ async def auto_refund(
             "financial_status": "paid",
             "order": "created_at desc",
         })
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"获取订单失败：{resp.text[:200]}")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"获取订单失败：{resp.text[:200]}")
+    orders = resp.json().get("orders", [])
 
-        orders = resp.json().get("orders", [])
-
-    # 2. 过滤出金额小于阈值的已付款订单
-    refundable = []
+    # ④ 过滤出金额在 (0, threshold) 的已付款订单
+    refundable: list[dict] = []
     for o in orders:
         try:
             price = float(o.get("total_price", 0))
-            if price < threshold:
+            if price > 0 and price < threshold:
                 refundable.append(o)
         except (ValueError, TypeError):
             continue
+    requested_total = sum(float(o.get("total_price", 0)) for o in refundable)
 
-    # 3. 逐笔自动退款（真调 Shopify Refund API）
-    results = []
+    # ⑤ 单次金额上限：整体拒绝（不做部分退，保证用户可预期）
+    if requested_total > MAX_REFUND_AMOUNT:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"本次将退款 {requested_total:.2f}，已超过单次上限 "
+                f"{MAX_REFUND_AMOUNT:.0f}，请调低阈值或分批操作"
+            ),
+        )
+
+    # ⑥ 单日累计上限
+    if not await _check_daily_refund_cap(str(current_user.id), requested_total):
+        raise HTTPException(
+            status_code=400,
+            detail=f"今日累计退款已达上限 {MAX_DAILY_REFUND_TOTAL:.0f}，请明天再试",
+        )
+
+    # ⑦ 逐笔退款（真调 Shopify Refund API）
+    results: list[dict] = []
     async with httpx.AsyncClient() as client:
         for order in refundable:
             order_id = order["id"]
-            total = order.get("total_price", "0")
-
-            # 构造退款请求体
+            total = str(order.get("total_price", "0"))
             refund_data = {
                 "refund": {
                     "notify": False,
@@ -429,15 +731,14 @@ async def auto_refund(
                     "refund_line_items": [],
                 }
             }
-
             try:
-                resp = await client.post(
+                r = await client.post(
                     f"{shop_url}/orders/{order_id}/refunds.json",
                     json=refund_data,
                     headers=headers,
                 )
-                if resp.status_code in (200, 201):
-                    refund = resp.json().get("refund", {})
+                if r.status_code in (200, 201):
+                    refund = r.json().get("refund", {})
                     results.append({
                         "order_id": order_id,
                         "amount": total,
@@ -449,9 +750,9 @@ async def auto_refund(
                         "order_id": order_id,
                         "amount": total,
                         "status": "failed",
-                        "error": resp.text[:100],
+                        "error": r.text[:200],
                     })
-            except Exception as e:
+            except httpx.HTTPError as e:
                 results.append({
                     "order_id": order_id,
                     "amount": total,
@@ -459,10 +760,26 @@ async def auto_refund(
                     "error": str(e),
                 })
 
+    refunded_amount = sum(float(r["amount"]) for r in results if r["status"] == "refunded")
+    if refunded_amount > 0:
+        # 只在实际发生退款时累加当日计数（全部失败/空跑不应占用当日额度）
+        await _record_daily_refund(str(current_user.id), refunded_amount)
+
+    succeeded = sum(1 for r in results if r["status"] == "refunded")
+    failed = sum(1 for r in results if r["status"] in ("failed", "error"))
     return {
+        "summary": {
+            "attempted": len(refundable),
+            "succeeded": succeeded,
+            "failed": failed,
+            "skipped": len(orders) - len(refundable),  # 拉到的已付款订单里不满足阈值、本次不退的
+            "requested_amount": round(requested_total, 2),
+            "refunded_amount": round(refunded_amount, 2),
+        },
+        # 兼容旧字段
         "total_orders_checked": len(orders),
         "refundable_count": len(refundable),
-        "refunded_count": sum(1 for r in results if r["status"] == "refunded"),
-        "total_refunded_amount": sum(float(r["amount"]) for r in results if r["status"] == "refunded"),
+        "refunded_count": succeeded,
+        "total_refunded_amount": round(refunded_amount, 2),
         "results": results,
     }
