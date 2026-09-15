@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
@@ -32,11 +32,11 @@ export default function LandingPage() {
   const navigate = useNavigate()
   const isLoggedIn = useAuthStore((s) => s.isAuthenticated)
   const [keyword, setKeyword] = useState('')
-  const [preview, setPreview] = useState(false)
 
+  /** 真实品类分析需要登录（后端接口要求鉴权），首页这里只做引流 */
   const handleAnalyze = () => {
     if (!keyword.trim()) return
-    setPreview(true)
+    navigate(isLoggedIn ? '/app/dashboard' : '/register')
   }
 
   return (
@@ -94,7 +94,7 @@ export default function LandingPage() {
                 </p>
               </motion.div>
 
-              {/* AI 分析输入框（show, don't tell） */}
+              {/* AI 分析输入框（真实入口，分析在登录后运行） */}
               <motion.div variants={item} className="w-full max-w-xl mx-auto space-y-3">
                 <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-1.5 shadow-sm">
                   <input
@@ -108,45 +108,8 @@ export default function LandingPage() {
                     <Sparkles className="h-4 w-4" /> AI 分析
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500">免费体验 · 无需注册 · 输入品类立刻看到 AI 市场分析</p>
+                <p className="text-xs text-slate-500">免费注册即可使用 · 输入品类运行真实 AI 市场分析</p>
               </motion.div>
-
-              {/* AI 分析结果预览 */}
-              {preview && (
-                <motion.div variants={item} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-                  className="w-full max-w-xl mx-auto text-left">
-                  <div className="rounded-xl border border-amber-500/30 bg-white/5 backdrop-blur p-5 shadow-md">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                        AI 正在分析「{keyword || '蓝牙耳机'}」
-                      </div>
-                      <span className="text-[11px] text-slate-500 font-mono">market scan · amazon US</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 mb-3">
-                      {[
-                        { label: '月搜索量', value: '8.2 万', tone: 'text-slate-100' },
-                        { label: '竞争强度', value: '中高', tone: 'text-amber-400' },
-                        { label: '预计利润率', value: '32%', tone: 'text-emerald-400' },
-                      ].map((m) => (
-                        <div key={m.label} className="rounded-lg bg-amber-500/10 border border-white/10 p-2.5">
-                          <p className="text-[11px] text-slate-500">{m.label}</p>
-                          <p className={`text-base font-bold font-mono ${m.tone}`}>{m.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-slate-500 leading-relaxed mb-3">
-                      {keyword || '蓝牙耳机'}：市场容量大但竞争激烈，低价位段同质化严重；建议差异化切入
-                      <b className="text-slate-200">降噪/长续航</b>细分，1688 采购价 ¥35-60，毛利率约 30-35%。
-                    </p>
-                    <div className="text-center">
-                      <Link to={isLoggedIn ? '/app/dashboard' : '/register'} className="inline-flex items-center gap-1 text-sm font-medium text-amber-400 hover:text-amber-300">
-                        登录查看完整分析报告 <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
               <motion.div variants={item} className="flex items-center justify-center gap-5 text-xs text-slate-500">
                 <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" />无需信用卡</span>
@@ -346,8 +309,6 @@ export default function LandingPage() {
 
       <footer className="relative z-10 border-t border-white/10 py-6 text-center text-xs text-slate-500 space-y-1">
         <p>© 2026 VeyaShip AI. All rights reserved.</p>
-        <p className="text-[11px] text-slate-400">浙ICP备XXXXXXXX号-1</p>
-        {/* ICP 备案号下来后替换上面的占位符 */}
       </footer>
     </div>
   )

@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/authStore'
+import { toErrorMessage } from '@/utils/errorMessage'
 import apiClient from '@/api/client'
 import OnboardingGuide from '@/components/dashboard/OnboardingGuide'
 import ImageHistoryGallery from '@/components/dashboard/ImageHistoryGallery'
@@ -83,7 +84,7 @@ export default function DashboardPage() {
       const res = await apiClient.get('/analytics/category', { params: { keyword: categoryInput.trim() } })
       setReport(res.data.report)
     } catch (err: any) {
-      setReport(`分析失败：${err?.response?.data?.detail || '请稍后重试'}`)
+      setReport(`分析失败：${toErrorMessage(err)}`)
     }
     setAnalyzing(false)
   }
@@ -397,7 +398,7 @@ function StoreCheckSection({ timeAgo }: { timeAgo: (d: string) => string }) {
       queryClient.invalidateQueries({ queryKey: ['store-check-history'] })
     },
     onError: (err: any) => {
-      setRunError(err?.response?.data?.detail || '巡检失败，请稍后重试')
+      setRunError(toErrorMessage(err, '巡检失败，请稍后重试'))
     },
   })
 

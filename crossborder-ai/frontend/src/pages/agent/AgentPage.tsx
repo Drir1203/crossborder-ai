@@ -24,6 +24,7 @@ import ProductReportCard from '@/components/agent/ProductReportCard'
 import type { AgentStep } from '@/types'
 import apiClient, { API_BASE } from '@/api/client'
 import { readSseUntil, TaskTimeoutError } from '@/api/sse'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 /**
  * AgentPage - AI 智能助手聊天页
@@ -190,7 +191,7 @@ export default function AgentPage() {
     onError: (err: any) => {
       setLiveSteps([])
       // 轮询抛出的普通 Error 没有 response；后端 HTTP 错误走 detail，都要兜底
-      const detail = err?.response?.data?.detail || err?.message || '执行失败，请重试'
+      const detail = toErrorMessage(err, '执行失败，请重试')
       setMessages((prev) => [
         ...prev,
         {

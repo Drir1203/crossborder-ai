@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import apiClient from '@/api/client'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 export default function ImagesPage() {
   const [prompt, setPrompt] = useState('')
@@ -58,8 +59,8 @@ export default function ImagesPage() {
           // 忽略轮询错误
         }
       }, 1500)
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || '提交失败')
+    } catch (err) {
+      setError(toErrorMessage(err, '提交失败'))
       setStatus('failed')
     }
   }
@@ -87,10 +88,11 @@ export default function ImagesPage() {
               disabled={status === 'submitting' || status === 'processing'}
             />
           </div>
+          {/* 后端 prompt 要求至少 5 个字符，这里同步拦住，避免白跑一次 422 */}
           <Button
             className="w-full"
             onClick={handleGenerate}
-            disabled={!prompt.trim() || status === 'submitting' || status === 'processing'}
+            disabled={prompt.trim().length < 5 || status === 'submitting' || status === 'processing'}
           >
             {(status === 'submitting' || status === 'processing') ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" />生成中...</>

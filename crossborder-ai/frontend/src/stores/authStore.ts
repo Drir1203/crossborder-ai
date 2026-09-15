@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import type { User } from '@/types'
 import { authApi } from '@/api/auth'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 interface AuthStore {
   user: User | null
@@ -46,8 +47,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       })
       await get().loadUser()
     } catch (err: any) {
-      const message =
-        err.response?.data?.detail || 'Login failed. Please try again.'
+      const message = toErrorMessage(err, '登录失败，请稍后重试')
       set({ isLoading: false, error: message })
       throw new Error(message)
     }
@@ -66,8 +66,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       })
       await get().loadUser()
     } catch (err: any) {
-      const message =
-        err.response?.data?.detail || 'Registration failed. Please try again.'
+      const message = toErrorMessage(err, '注册失败，请稍后重试')
       set({ isLoading: false, error: message })
       throw new Error(message)
     }

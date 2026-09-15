@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import apiClient from '@/api/client'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 interface Product {
   id: string
@@ -253,7 +254,7 @@ export default function ProductsPage() {
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
               <div>
                 <p className="text-amber-600 font-medium">抓取失败</p>
-                <p className="text-muted-foreground">{(scrapeMutation.error as any)?.response?.data?.detail || '请稍后重试'}</p>
+                <p className="text-muted-foreground">{toErrorMessage(scrapeMutation.error)}</p>
               </div>
             </div>
           )}

@@ -88,7 +88,7 @@ export default function BillingPage() {
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">剩余积分</p>
-            <p className="text-lg font-semibold mt-0.5">{user.credits_remaining ?? user.credits}</p>
+            <p className="text-lg font-semibold mt-0.5">{user.credits_remaining ?? 0}</p>
           </div>
         </CardContent>
       </Card>

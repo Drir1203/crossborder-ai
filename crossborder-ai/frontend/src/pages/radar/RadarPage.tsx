@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import apiClient from '@/api/client'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 interface Competitor {
   url: string
@@ -64,7 +65,7 @@ export default function RadarPage() {
             price: null,
             sales_count: null,
             shop_name: null,
-            error: err?.response?.data?.detail || '抓取失败',
+            error: toErrorMessage(err, '抓取失败'),
           })
         }
       }

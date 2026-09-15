@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import apiClient from '@/api/client'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 interface Product {
   id: string
@@ -304,7 +305,7 @@ export default function ContentPage() {
                 <div>
                   <p className="font-medium text-destructive">生成失败</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {(generateMutation.error as any)?.response?.data?.detail || '请稍后重试'}
+                    {toErrorMessage(generateMutation.error)}
                   </p>
                 </div>
               </CardContent>
@@ -486,7 +487,7 @@ export default function ContentPage() {
                 {publishMutation.error && (
                   <p className="text-sm text-destructive flex items-center gap-1">
                     <AlertCircle className="h-4 w-4" />
-                    {(publishMutation.error as any)?.response?.data?.detail?.message?.substring?.(0, 100) || '发布失败'}
+                    {toErrorMessage(publishMutation.error, '发布失败').substring(0, 100)}
                   </p>
                 )}
               </CardContent>

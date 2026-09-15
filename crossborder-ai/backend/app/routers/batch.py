@@ -8,6 +8,7 @@
 
 import csv
 import io
+import logging
 import math
 from datetime import datetime, timezone
 from typing import Optional
@@ -24,6 +25,8 @@ from app.models.batch_job import BatchJob
 from app.models.product import Product
 from app.models.user import User
 from pydantic import BaseModel
+
+logger = logging.getLogger("veyaship")
 
 router = APIRouter(prefix="/batch", tags=["批量处理"])
 
@@ -169,11 +172,13 @@ async def process_job(
         job.processed_at = datetime.now(timezone.utc)
         await db.flush()
         return {"message": "处理成功", "product_id": str(product.id)}
-    except Exception as e:
+    except Exception:
+        # 技术细节只进服务端日志；job.error 会原样展示给卖家，必须是中文
+        logger.exception("批量任务处理失败 job_id=%s", job.id)
         job.status = "failed"
-        job.error = str(e)
+        job.error = "处理失败，请稍后重试"
         await db.flush()
-        raise HTTPException(status_code=500, detail=f"处理失败：{str(e)}")
+        raise HTTPException(status_code=500, detail="处理失败，请稍后重试")
 
 
 @router.post("/cron/process-batch")
@@ -205,10 +210,11 @@ async def cron_process_batch(
             job.status = "processed"
             job.processed_at = datetime.now(timezone.utc)
             results.append({"job_id": str(job.id), "status": "success"})
-        except Exception as e:
+        except Exception:
+            logger.exception("批量任务处理失败 job_id=%s", job.id)
             job.status = "failed"
-            job.error = str(e)
-            results.append({"job_id": str(job.id), "status": "failed", "error": str(e)})
+            job.error = "处理失败，请稍后重试"
+            results.append({"job_id": str(job.id), "status": "failed", "error": "处理失败，请稍后重试"})
 
     await db.flush()
     return {"processed": len(results), "results": results}
@@ -282,10 +288,11 @@ async def batch_process_with_ai(
                 "title": title[:50], "bullet_count": len(bullets),
                 "status": "success",
             })
-        except Exception as e:
+        except Exception:
+            logger.exception("批量任务处理失败 job_id=%s", job.id)
             job.status = "failed"
-            job.error = str(e)
-            results.append({"job_id": str(job.id), "status": "failed", "error": str(e)})
+            job.error = "处理失败，请稍后重试"
+            results.append({"job_id": str(job.id), "status": "failed", "error": "处理失败，请稍后重试"})
 
     await db.flush()
     return {"message": f"已处理 {len(results)} 条", "processed": len(results), "results": results}

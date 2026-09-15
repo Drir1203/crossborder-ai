@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import apiClient from '@/api/client'
+import { toErrorMessage } from '@/utils/errorMessage'
 
 /**
  * BatchPage - 批量任务管理（F4 Batch）
@@ -186,7 +187,7 @@ export default function BatchPage() {
           {uploadMutation.isError && (
             <div className="flex items-center gap-2 text-sm text-destructive">
               <AlertCircle className="h-4 w-4" />
-              {(uploadMutation.error as any)?.response?.data?.detail || '上传失败'}
+              {toErrorMessage(uploadMutation.error, '上传失败')}
             </div>
           )}
         </CardContent>
