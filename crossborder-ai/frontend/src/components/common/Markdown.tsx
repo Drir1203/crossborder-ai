@@ -16,7 +16,7 @@ const components: Components = {
   ),
   h3: ({ node, ...props }) => <h3 className="text-sm font-semibold mt-3 mb-1.5" {...props} />,
   h4: ({ node, ...props }) => <h4 className="text-sm font-semibold mt-2 mb-1" {...props} />,
-  p: ({ node, ...props }) => <p className="my-1.5 leading-relaxed" {...props} />,
+  p: ({ node, ...props }) => <p className="my-1.5 leading-relaxed break-words" {...props} />,
   table: ({ node, ...props }) => (
     <div className="overflow-x-auto my-2">
       <table className="w-full text-xs border-collapse" {...props} />
@@ -44,10 +44,19 @@ const components: Components = {
   ),
 }
 
-export default function Markdown({ content }: { content: string }) {
+export default function Markdown({
+  content,
+  inverted = false,
+}: {
+  content: string
+  /** 置于主色底气泡内（如用户消息 bg-primary）时置 true。
+   *  此时链接若仍用 text-primary 会与背景同色而不可见，需改为反色。 */
+  inverted?: boolean
+}) {
   return (
     // text-foreground：body 的 @apply text-foreground 未编译，裸文本会回退黑色看不清，这里显式声明
-    <div className="text-sm text-foreground">
+    // [&_a:] 后代选择器特异性(0,1,1)高于 a 自身的 .text-primary(0,1,0)，可稳定覆盖链接颜色
+    <div className={`text-sm text-foreground ${inverted ? '[&_a]:text-primary-foreground' : ''}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>

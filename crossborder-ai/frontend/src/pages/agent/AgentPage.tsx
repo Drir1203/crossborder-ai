@@ -262,7 +262,8 @@ export default function AgentPage() {
                 ? 'bg-primary text-primary-foreground rounded-tr-[4px]'
                 : 'bg-muted rounded-tl-[4px]'
             }`}>
-              <Markdown content={msg.content} />
+              {/* inverted：主色底气泡内链接须用反色，否则 text-primary 与背景同色不可见 */}
+              <Markdown content={msg.content} inverted={isUser} />
             </div>
           )}
 
