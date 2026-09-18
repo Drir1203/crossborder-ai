@@ -13,7 +13,7 @@
 | 所有 CSS 加载 | ✅ 200 OK | 无 404 |
 | 后端健康检查 | ✅ healthy | 数据库连接正常 |
 | API 文档 | ⚠️ 生产关闭 | DEBUG=false 时正常 |
-| HTTPS | ⚠️ 未开启 | 未备案前正常 |
+| HTTPS | ✅ 已开启 | Let's Encrypt 证书 + 自动续期 |
 
 ---
 

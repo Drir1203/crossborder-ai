@@ -63,6 +63,10 @@ qdrant_storage/
 nginx/ssl/
 nginx/www/
 backups/
+*.bak
+
+# 本地个人文档（仅存本机，不入库、不推送）
+RESUME.md
 node_modules/
 .venv/
 venv/
